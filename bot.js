@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 /**
  * @module Seven
  */
@@ -7,8 +9,9 @@ const { Format: F } = require("./helpers/format")
 /*** STARTUP | DECIDE ENV VAR SOURCE ***/
 console.log("%c╔════════════════════╗\n║ seven-server 1.01a ║\n╚════════════════════╝", "color:#9FEF00; font-weight:bold; font-size: 50")
 F.logRainbow()
-if (!process.env.NODE_ENV == "development") {
+if (process.env.NODE_ENV != "development") {
 	console.log("Started at " + new Date().toLocaleTimeString() + " in production. Using prod env vars")
+    require("dotenv").config({ path: ".env" })
 } else {
 	console.log("Started at " + new Date().toLocaleTimeString() + " on dev machine. Scanning ./config/env for vars")
 	require("dotenv").config({ path: "./config/.env" })
@@ -36,8 +39,9 @@ const { generateBinaryClockImage } = require("./helpers/binclock")
 /*** HANDLE DEVELOPMENT INSTANCE CASE ***/
 
 var DEV_MODE_ON = false
+const IS_DEV_INSTANCE = process.env.IS_DEV_INSTANCE === "true";
 
-if (process.env.IS_DEV_INSTANCE) {
+if (IS_DEV_INSTANCE) {
 	DEV_MODE_ON = true
 	console.error("DEVELOPMENT MODE ON.\n  Only queries by the developer will be responded to by this instance.\n  (Avoids conflicts/ duplicate responses in production use)")
 }

@@ -137,7 +137,8 @@ class SevenDatastore {
 	}
 
 	syncAgent() {
-		if (process.env["IS_DEV_INSTANCE"])
+        const IS_DEV_INSTANCE = process.env.IS_DEV_INSTANCE === "true";
+		if (IS_DEV_INSTANCE)
 			return setTimeout(() => dFlowEnt.syncAgentUpstream(), 60 * 1000)
 		else return dFlowEnt.syncAgentDownstream()
 	}

@@ -2,7 +2,8 @@ const express = require("express")
 const crypto = require("crypto")
 
 let DEV_MODE_ON = false
-if (process.env.IS_DEV_INSTANCE) {
+const IS_DEV_INSTANCE = process.env.IS_DEV_INSTANCE === "true";
+if (IS_DEV_INSTANCE) {
 	DEV_MODE_ON = true
 }
 
