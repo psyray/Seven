@@ -1,0 +1,17 @@
+[Unit]
+Description=Seven
+
+[Service]
+ExecStart=/root/htb/SevenBot/Seven/bot.js
+Restart=always
+User=nobody
+# Note Debian/Ubuntu uses 'nogroup', RHEL/Fedora uses 'nobody'
+Group=nogroup
+Environment=PATH=/usr/bin:/usr/local/bin
+Environment=NODE_ENV=development
+WorkingDirectory=/root/htb/SevenBot/Seven
+StandardOutput=file:/var/log/sevenbot/sevenbot.log
+StandardError=file:/var/log/sevenbot/sevenbot-error.log
+
+[Install]
+WantedBy=multi-user.target
