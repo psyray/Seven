@@ -19,7 +19,9 @@ const agentsClient = new dialogflow.AgentsClient({
 	credentials: credentials, 
 })
 
-const projectId = process.env.GOOGLE_CLOUD_PROJECT
+// Set project name hard coded due to this bug
+// https://github.com/googleapis/nodejs-automl/issues/107#issuecomment-668295771
+const projectId = 'seven-htb-bot-cnsn'
 const agentPath = entitiesClient.projectAgentPath(projectId)
 
 
