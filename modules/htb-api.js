@@ -111,8 +111,8 @@ class HtbApiConnector {
 				.set({ Authorization: "Bearer " + this.API_TOKEN })
 				.retry(10, [1000, 3000, 60000], [])
 				.timeout({
-					response: 10000,  // Wait 10 seconds for the server to start sending,
-					deadline: 60000, // but allow 1 minute for the file to finish loading.
+					response: 120000,  // Wait 10 seconds for the server to start sending,
+					deadline: 2400000, // but allow 1 minute for the file to finish loading.
 				})
 				.use(this.getThrottle(endpoint).plugin())
 				// .use(logger)
