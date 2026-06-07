@@ -294,7 +294,9 @@ async function updateDiscordIds(client, guildIdString) {
 
 async function refresh() {
 	await DAT.update()
-	HTB_PUSHER_OWNS_SUBSCRIPTION.auth = DAT.V3API.CSRF_TOKEN
+	if (HTB_PUSHER_OWNS_SUBSCRIPTION) {
+		HTB_PUSHER_OWNS_SUBSCRIPTION.auth = DAT.V4API.getApiToken()
+	}
 }
 
 async function main() {
@@ -309,7 +311,7 @@ async function main() {
 			{ channel: "infobox-channel", event: "display-info" },
 			{ channel: "shoutbox-channel", event: "display-shout" },
 			{ channel: "joins-channel", event: "display-info" }
-		], DAT.V3API.CSRF_TOKEN)
+		], DAT.V4API.getApiToken())
 
 	if (!DEV_MODE_ON) {
 		await DAT.syncAgent()

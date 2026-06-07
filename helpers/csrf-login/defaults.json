@@ -1,6 +1,0 @@
-{
-  "host": "http://localhost:3000",
-  "loginFormId": "loginform",
-  "tokenFieldName": "csrfmiddlewaretoken",
-  "loginPath": "/login/"
-}

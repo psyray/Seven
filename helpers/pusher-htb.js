@@ -12,6 +12,17 @@ const TD = require("turndown")
 
 const log = createLogger("pusher-htb")
 
+const pusherWarn = Pusher.warn.bind(Pusher)
+Pusher.warn = function (...args) {
+	const err = args[1]
+	const message = String(err?.error || err?.message || "")
+	if (err?.type === "WebSocketError" && (message.includes("close code 1000") || message.includes("CLOSE_NORMAL"))) {
+		log.debug("Pusher websocket closed normally, reconnecting")
+		return
+	}
+	pusherWarn(...args)
+}
+
 function cleanAttribute (attribute) {
 	return attribute ? attribute.replace(/(\n+\s*)+/g, "\n") : ""
 }
@@ -148,7 +159,7 @@ class HtbPusherEvent {
 
 
 
-/** Class representing a HTB Pusher Subscription (legacy).
+/** Class representing a HTB Pusher Subscription.
  * 
  * @typedef HtbPusherSubscription
  * @property {number} client - The Pusher Client instance.
@@ -159,17 +170,18 @@ class HtbPusherSubscription extends EventEmitter {
    * Creates a new HtbPusherSubscription object.
    * @param {string} apiToken - The Pusher Client instance.
    * @param {Object} bindings - An array of channel:event pair objects to subscribe to.
-   * @param {string} csrfToken - The Htb CSRF protection token, used for (primitive) authentication.
+   * @param {string} bearerToken - HTB v4 app token used for Pusher channel auth.
    * @returns {HtbPusherSubscription}
    */
 
 	// new HtbPusherSubscription('97608bf7532e6f0fe898', 'owns-channel', 'display-info', token)
 	//'97608bf7532e6f0fe898' (Htb pusher api token)
-	constructor(apiToken, bindings, csrfToken) {
+	constructor(apiToken, bindings, bearerToken) {
 		super()
+		this.bearerToken = bearerToken
 		this.client = new Pusher(apiToken, {
 			authEndpoint: `${HTB_APP_BASE}/pusher/auth`,
-			auth: { "X-CSRF-Token": csrfToken },
+			auth: { Authorization: "Bearer " + bearerToken },
 			authTransport: "ajax",
 			cluster: "eu",
 			encrypted: true
@@ -209,12 +221,13 @@ class HtbPusherSubscription extends EventEmitter {
 	}
 
 	/**
-   * Updates the CSRF-token based authentication for the Pusher Client.
-   * @param {Object} csrfToken - This param should be a token string.
+   * Updates the Bearer-token based authentication for the Pusher Client.
+   * @param {string} bearerToken - HTB v4 app token.
    */
-	set auth(csrfToken) {
+	set auth(bearerToken) {
 		try {
-			this.client.config.auth["X-CSRF-Token"] = csrfToken
+			this.bearerToken = bearerToken
+			this.client.config.auth.Authorization = "Bearer " + bearerToken
 		} catch (error) {
 			console.error(error)
 		}

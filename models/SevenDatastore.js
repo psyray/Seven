@@ -28,7 +28,6 @@ const {
 
 const { HtbSpecialFlag } = require("../helpers/classes.js")
 const { HtbApiConnector: V4 } = require("../modules/htb-api.js")
-const { HtbLegacyConnector: V3 } = require("../modules/htb-legacy-connector")
 const dFlowEnt = require("../helpers/dflow")
 const { Helpers: H } = require("../helpers/helpers.js")
 const { createLogger } = require("../helpers/logger.js")
@@ -39,8 +38,7 @@ class SevenDatastore {
 	constructor() {
 		this.UPDATE_LOCK = false
 		this.LAST_UPDATE = new Date()
-		this.V4API = new V4() // v4 API connector.
-		this.V3API = new V3() // Legacy (parser + v3 API) data connector.
+		this.V4API = new V4()
 		this.TEAM_STATS = {}
 		this.TEAM_MEMBERS = {}
 		this.TEAM_MEMBERS_IGNORED = {}
@@ -134,9 +132,7 @@ class SevenDatastore {
 	}
 
 	init() {
-		return this.V4API.init({ api_token: process.env.HTB_V4_TOKEN, email: process.env.HTB_EMAIL, password: process.env.HTB_PASS }).then(
-			this.V3API.init().catch(console.error)
-		)
+		return this.V4API.init({ api_token: process.env.HTB_V4_TOKEN })
 	}
 
 	syncAgent() {
@@ -146,37 +142,7 @@ class SevenDatastore {
 		else return dFlowEnt.syncAgentDownstream()
 	}
 
-	// async getMachinesComplete() {
-	// 	console.time("Getting machines [V3] took")
-	// 	var MACHINES_V3 = await this.V3API.getMachines()
-	// 	var urmachine = false
-	// 	urmachine = await this.V3API.getUnreleasedMachine()
-	// 	console.warn(
-	// 		urmachine
-	// 			? "[APIv3]::: Got unreleased machine " + urmachine.name + "..."
-	// 			: "[APIv3]::: There are currently no machines in unreleased section."
-	// 	)
-	// 	if (urmachine) {
-	// 		MACHINES_V3[urmachine.id] = urmachine
-	// 	}
-	// 	var machineSubmissions = await this.V3API.getMachineSubmissions()
-	// 	var mSObj = machineSubmissions.length
-	// 		? H.arrToObj(machineSubmissions, "id")
-	// 		: {}
-	// 	console.timeEnd("Getting machines [V3] took")
-	// 	console.time("Getting machines [V4] took")
-	// 	var MACHINES_V4 = await this.V4API.getAllCompleteMachineProfiles()
-	// 	var COMBINED_MACHINES = {}
-	// 	console.timeEnd("Getting machines [V4] took")
-	// 	return Object.assign(COMBINED_MACHINES, mSObj,)
-	// }
-
-	// async getMachineTagsComplete() {
-	// 	console.time("Getting machine tags [V4] took")
-	// 	var mt = await this.V4API.getMachineTags()
-	// 	console.timeEnd("Getting machine tags [V4] took")
-	// 	return mt
-	// }
+	// async getMachinesComplete() { ... removed — v4-only data path via update() }
 
 	async informAdminViaDm(title, description) {
 		// console.warn("This is a placeholder function. Override it from bot.js with the method from 'Send' module")
@@ -197,59 +163,23 @@ class SevenDatastore {
 			const updateStarted = Date.now()
 			this.logUpdateProgress("HTB data update started")
 			try {
-				/* LEGACY STUFF FOR PARSING / PUSHER CONNECT / DATA ABT TEAMS: */
-				const v3Started = Date.now()
-				this.logUpdatePhase("1/7", "Refreshing V3 session (CSRF / Pusher auth)")
-				try {
-					await this.V3API.init().catch(console.error)
-				} catch (error) {
-					log.error("V3 session refresh failed", { message: error.message })
-				}
-				var SESH = this.V3API.SESSION
-				log.info("V3 session ready", {
-					hasSession: Object.keys(SESH).length > 0,
-					hasCsrf: Boolean(this.V3API.CSRF_TOKEN),
-					durationMs: Date.now() - v3Started,
-				})
-
-				var machineSubmissions, mSObj
-				const submissionsStarted = Date.now()
-				this.logUpdatePhase("2/7", "Fetching machine submissions (legacy HTML scrape)")
-				try {
-					machineSubmissions = await this.V3API.getMachineSubmissions()
-					mSObj = machineSubmissions.length
-						? H.arrToObj(machineSubmissions, "id")
-						: {}
-					log.info("Machine submissions fetched", {
-						count: machineSubmissions.length,
-						durationMs: Date.now() - submissionsStarted,
-					})
-				} catch (error) {
-					log.warn("Machine submissions fetch failed — continuing without them", {
-						message: error.message,
-						durationMs: Date.now() - submissionsStarted,
-					})
-					mSObj = {}
-				}
-
 				const machinesStarted = Date.now()
-				this.logUpdatePhase("3/7", "Fetching machines (V4 API — slow step, rate-limited by HTB)")
+				this.logUpdatePhase("1/5", "Fetching machines (V4 API — slow step, rate-limited by HTB)")
 				var MACHINES_V4 = await this.V4API.getAllCompleteMachineProfiles()
 				log.info("Fetching starting point machines")
 				this.MISC.STARTING_POINT_MACHINES = await this.V4API.getAllStartingPointMachines()
 
-				this.MACHINES = Object.assign({}, mSObj, MACHINES_V4, this.MISC.STARTING_POINT_MACHINES)
+				this.MACHINES = Object.assign({}, MACHINES_V4, this.MISC.STARTING_POINT_MACHINES)
 
 				log.info("Machines collected", {
 					total: Object.keys(this.MACHINES).length,
-					submissions: Object.keys(mSObj).length,
 					v4Profiles: Object.keys(MACHINES_V4).length,
 					startingPoint: Object.keys(this.MISC.STARTING_POINT_MACHINES).length,
 					durationMs: Date.now() - machinesStarted,
 				})
 
 				const specialsStarted = Date.now()
-				this.logUpdatePhase("4/7", "Fetching fortresses, endgames and pro labs")
+				this.logUpdatePhase("2/5", "Fetching fortresses, endgames and pro labs")
 				this.MISC.FORTRESSES = await this.V4API.getAllFortresses()
 				this.MISC.ENDGAMES = await this.V4API.getAllEndgames()
 				this.MISC.PROLABS = await this.V4API.getAllProlabs()
@@ -261,7 +191,7 @@ class SevenDatastore {
 				})
 
 				const tagsStarted = Date.now()
-				this.logUpdatePhase("5/7", "Fetching machine tags")
+				this.logUpdatePhase("3/5", "Fetching machine tags")
 				var mt = await this.V4API.getMachineTags()
 				this.MISC.MACHINE_TAGS = mt
 				log.info("Machine tags collected", {
@@ -270,7 +200,7 @@ class SevenDatastore {
 				})
 
 				const teamStarted = Date.now()
-				this.logUpdatePhase("6/7", "Fetching team / university data and member profiles")
+				this.logUpdatePhase("4/5", "Fetching team / university data and member profiles")
 				if (process.env.HTB_TEAM_ID) {
 					log.info("Using HTB_TEAM_ID", { teamId: process.env.HTB_TEAM_ID })
 					this.TEAM_STATS = await this.V4API.getCompleteTeamProfile(
@@ -288,38 +218,25 @@ class SevenDatastore {
 						)
 				} else if (process.env.HTB_UNIVERSITY_ID) {
 					log.info("Using HTB_UNIVERSITY_ID", { universityId: process.env.HTB_UNIVERSITY_ID })
-					var UNI_MEMBER_IDS = await this.V3API.getUniversityMemberIds(
-						SESH,
+					var UNI_MEMBERS_BASE = await this.V4API.getUniversityMembers(
 						process.env.HTB_UNIVERSITY_ID,
 						Object.keys(this.TEAM_MEMBERS_IGNORED)
 					)
-					var UNI_MEMBERS = await this.V4API.getCompleteMemberProfilesByIds(
-						UNI_MEMBER_IDS
+					this.TEAM_MEMBERS =
+						await this.V4API.getCompleteMemberProfilesByMemberPartials(
+							UNI_MEMBERS_BASE
+						)
+					var uniProfile = await this.V4API.getUniversityProfile(
+						process.env.HTB_UNIVERSITY_ID
 					)
-					Object.values(UNI_MEMBERS).forEach(
-						(e) =>
-						(e.role =
-							e.id == (UNI_MEMBER_IDS[0] || null) ? "admin" : "student")
-					)
-					this.TEAM_MEMBERS = UNI_MEMBERS
-					var captain = this.TEAM_MEMBERS[UNI_MEMBER_IDS[0]]
-					this.TEAM_STATS = Object.assign(
-						(await this.V3API.getUniversityProfile(
-							SESH,
+					var captain = UNI_MEMBERS_BASE.find(member => member.role === "admin") || UNI_MEMBERS_BASE[0]
+					this.TEAM_STATS = Object.assign({}, uniProfile || {}, {
+						avatar_url: `https://www.hackthebox.com/storage/universities/${Number(
 							process.env.HTB_UNIVERSITY_ID
-						)) || {},
-						(await this.V4API.getUniversityProfile(
-							process.env.HTB_UNIVERSITY_ID
-						)) || {},
-						{
-							avatar_url: `https://www.hackthebox.com/storage/universities/${Number(
-								process.env.HTB_UNIVERSITY_ID
-							)}.png`,
-							type: "university",
-							captain: { id: captain.id, name: captain.name },
-						}
-					)
-					// this.TEAM_MEMBERS = await this.V4API.getCompleteMemberProfilesByMemberPartials(TEAM_MEMBERS_BASE)
+						)}.png`,
+						type: "university",
+						captain: captain ? { id: captain.id, name: captain.name } : null,
+					})
 				} else {
 					log.warn("No HTB_TEAM_ID or HTB_UNIVERSITY_ID configured — skipping team data")
 				}
@@ -332,7 +249,7 @@ class SevenDatastore {
 				var names = this.vTM.map((e) => e.name.toLowerCase())
 
 				const challengesStarted = Date.now()
-				this.logUpdatePhase("7/7", "Fetching challenges and categories")
+				this.logUpdatePhase("5/5", "Fetching challenges and categories")
 				this.CHALLENGES = await this.V4API.getAllCompleteChallengeProfiles()
 				this.MISC.CHALLENGE_CATEGORIES =
 					await this.V4API.getChallengeCategories()
@@ -341,13 +258,6 @@ class SevenDatastore {
 					categories: Object.keys(this.MISC.CHALLENGE_CATEGORIES || {}).length,
 					durationMs: Date.now() - challengesStarted,
 				})
-
-				// this.MISC.SPECIALS = await this.V3API.getSpecials()
-				// console.timeEnd("Getting specials took")
-				// let specialCounts = Object.keys(this.MISC.SPECIALS).map(
-				// 	(e) => `${this.MISC.SPECIALS[e].length} ${e}`
-				// )
-
 
 				this.logUpdatePhase("sync", "Updating Dialogflow entities")
 				try {
@@ -445,9 +355,6 @@ class SevenDatastore {
 		}
 	}
 
-	getCsrfToken() {
-		return this.V3API.CSRF_TOKEN
-	}
 	/**
 	 * @param {*} message - Optional: the Discord message (to resolve self username if 'i' is used)
 	 * @param {*} targetType - One of ["member", "memberActivity", "machine", "challenge"]. Specifies the target DS to filter.

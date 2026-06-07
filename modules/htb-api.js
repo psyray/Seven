@@ -31,6 +31,28 @@ function isHtmlResponse(text) {
 	return trimmed.startsWith("<!doctype") || trimmed.startsWith("<html")
 }
 
+const HTB_NO_RETRY_STATUSES = [400, 401, 403, 404, 405, 410, 422]
+
+function extractListData(response) {
+	const data = response?.data ?? response?.message ?? response?.info
+	if (Array.isArray(data)) return data
+	if (data && typeof data === "object") return Object.values(data)
+	return []
+}
+
+async function fetchOptionalList(api, endpointPath, label) {
+	try {
+		const response = await api.htbApiGet(endpointPath)
+		return extractListData(response)
+	} catch (error) {
+		if (error.status === 404) {
+			log.warn(`${label} API unavailable (404) — skipping`, { endpoint: endpointPath })
+			return []
+		}
+		throw error
+	}
+}
+
 class HtbApiConnector {
 
 	constructor() {
@@ -45,43 +67,13 @@ class HtbApiConnector {
 		})
 	}
 
-	async init({ api_token, email, password }) {
-		if (api_token) {
-			this.API_TOKEN = api_token
-			if (this.checkTokenExpiring(api_token)) {
-				log.warn("HTB_V4_TOKEN is expired or expiring soon. Regenerate it on app.hackthebox.com — email/password login no longer renews v4 tokens.")
-			}
-		} else if (email && password) {
-			this.API_TOKEN = await this.getV4AccessToken(email, password)
-		} else {
-			throw new Error("HTB_V4_TOKEN or HTB_EMAIL/HTB_PASS must be configured")
+	async init({ api_token }) {
+		if (!api_token) {
+			throw new Error("HTB_V4_TOKEN must be configured")
 		}
-
-		this.AUTH_INFO = { api_token, email, password }
-	}
-
-	async getV4AccessToken(email, password) {
-		const url = `${HTB_API_BASE}/login`
-		log.warn("Attempting v4 login via email/password (deprecated by HTB — prefer HTB_V4_TOKEN)", { url })
-		try {
-			const response = await request.agent()
-				.post(url)
-				.set({ "Content-Type": "application/json;charset=utf-8" })
-				.send({ email, password, remember: true })
-
-			const token = response.body?.message?.access_token
-			if (!token) {
-				throw new Error("Login response did not contain access_token")
-			}
-			log.info(`Acquired v4 session (valid until ${new Date(parseJwt(token).exp * 1000).toLocaleString()})`)
-			return token
-		} catch (err) {
-			const status = err.status || err.response?.status
-			log.error("v4 login failed — regenerate HTB_V4_TOKEN manually on app.hackthebox.com", {
-				status,
-				message: err.message,
-			})
-			throw new Error(`HTB v4 login unavailable (HTTP ${status || "unknown"}). Set a fresh HTB_V4_TOKEN in your environment.`)
+		this.API_TOKEN = api_token
+		if (this.checkTokenExpiring(api_token)) {
+			log.warn("HTB_V4_TOKEN is expired or expiring soon. Regenerate it on app.hackthebox.com.")
 		}
 	}
 
@@ -107,16 +99,7 @@ class HtbApiConnector {
 
 		if (!this.tokenExpiryWarned) {
 			this.tokenExpiryWarned = true
-			log.warn("HTB_V4_TOKEN is expiring — attempting refresh (likely to fail; regenerate token on app.hackthebox.com)")
-		}
-
-		if (this.AUTH_INFO?.email && this.AUTH_INFO?.password) {
-			try {
-				this.API_TOKEN = await this.getV4AccessToken(this.AUTH_INFO.email, this.AUTH_INFO.password)
-				return
-			} catch (error) {
-				log.error("Token refresh via login failed", { message: error.message })
-			}
+			log.warn("HTB_V4_TOKEN is expiring — regenerate it on app.hackthebox.com and restart the bot.")
 		}
 
 		throw new Error("HTB_V4_TOKEN expired. Regenerate it on app.hackthebox.com and restart the bot.")
@@ -134,7 +117,7 @@ class HtbApiConnector {
 				.get(url)
 				.set({ Accept: "application/json, */*" })
 				.set({ Authorization: "Bearer " + this.API_TOKEN })
-				.retry(10, [1000, 3000, 60000], [])
+				.retry(10, [1000, 3000, 60000], HTB_NO_RETRY_STATUSES)
 				.timeout({ response: 120000, deadline: 2400000 })
 				.use(this.getThrottle(endpoint).plugin())
 				.then((response) => {
@@ -155,12 +138,20 @@ class HtbApiConnector {
 						log.debug(`GET ${endpointPath}`, requestMeta)
 					}
 
+					if (response.status >= 400) {
+						const err = new Error(`HTTP ${response.status} for ${endpointPath}`)
+						err.status = response.status
+						err.response = response
+						return reject(err)
+					}
+
+					if (isHtmlResponse(response.text)) {
+						const err = new Error(`Non-JSON HTML response for ${endpointPath} (check HTB_V4_TOKEN and HTB_API_BASE — use https://labs.hackthebox.com/api/v4)`)
+						log.error(err.message, { status: response.status, url })
+						return reject(err)
+					}
+
 					if (parseText) {
-						if (isHtmlResponse(response.text)) {
-							const err = new Error(`Non-JSON HTML response for ${endpointPath} (check HTB_V4_TOKEN and HTB_API_BASE)`)
-							log.error(err.message, { status: response.status, url })
-							return reject(err)
-						}
 						try {
 							return resolve(JSON.parse(response.text))
 						} catch (error) {
@@ -170,7 +161,7 @@ class HtbApiConnector {
 					}
 
 					if (typeof response.body === "string" && isHtmlResponse(response.body)) {
-						const err = new Error(`Non-JSON HTML response for ${endpointPath} (check HTB_V4_TOKEN and HTB_API_BASE)`)
+						const err = new Error(`Non-JSON HTML response for ${endpointPath} (check HTB_V4_TOKEN and HTB_API_BASE — use https://labs.hackthebox.com/api/v4)`)
 						log.error(err.message, { status: response.status, url })
 						return reject(err)
 					}
@@ -228,15 +219,18 @@ class HtbApiConnector {
 	}
 
 	async getStartingPointMachinesForTier(tierNumber) {
-		return this.htbApiGet(`sp/tier/${tierNumber}`).then(e => e.data)
+		const response = await this.htbApiGet(`sp/tier/${tierNumber}`)
+		return response?.data ?? response ?? null
 	}
 
 	async getAllStartingPointMachines() {
 		log.info("Fetching starting point machines (tiers 1-3)")
-		var t1 = await this.getStartingPointMachinesForTier(1)
-		var t2 = await this.getStartingPointMachinesForTier(2)
-		var t3 = await this.getStartingPointMachinesForTier(3)
-		let machines = [t1, t2, t3].map(t => t.machines.map(m => Object.assign({ tier: { id: t.id, name: t.name, description: t.description } }, m))).flat()
+		const tiers = await Promise.all([1, 2, 3].map(tier => this.getStartingPointMachinesForTier(tier)))
+		const machines = tiers
+			.filter(tier => tier?.machines?.length)
+			.flatMap(tier => tier.machines.map(machine => Object.assign({
+				tier: { id: tier.id, name: tier.name, description: tier.description },
+			}, machine)))
 		return setTypeForValues("sp_machine", H.arrToObj(machines, "id"))
 	}
 
@@ -355,7 +349,7 @@ class HtbApiConnector {
 	}
 
 	async getAllFortressEntries() {
-		return Object.values((await this.htbApiGet("fortresses")).data)
+		return fetchOptionalList(this, "fortresses", "Fortresses")
 	}
 
 	async getFortressProfile(id) {
@@ -371,7 +365,7 @@ class HtbApiConnector {
 	}
 
 	async getAllEndgameEntries() {
-		return Object.values((await this.htbApiGet("endgames")).data)
+		return fetchOptionalList(this, "endgames", "Endgames")
 	}
 
 	async getEndgameProfile(id) {
@@ -384,6 +378,10 @@ class HtbApiConnector {
 
 	async getAllEndgames() {
 		let entries = await this.getAllEndgameEntries()
+		if (!entries.length) {
+			log.info("No endgame entries to fetch")
+			return {}
+		}
 		log.info("Fetching endgame profiles and flags", { count: entries.length })
 		let profiles = await Promise.all(entries.map(entry => this.getEndgameProfile(entry.id)))
 		let flags = await Promise.all(entries.map(entry => this.getEndgameFlags(entry.id)
@@ -394,7 +392,17 @@ class HtbApiConnector {
 	}
 
 	async getAllProLabEntries() {
-		return Object.values((await this.htbApiGet("prolabs")).data.labs)
+		try {
+			const response = await this.htbApiGet("prolabs")
+			const labs = response?.data?.labs
+			return Array.isArray(labs) ? labs : []
+		} catch (error) {
+			if (error.status === 404) {
+				log.warn("Pro labs API unavailable (404) — skipping")
+				return []
+			}
+			throw error
+		}
 	}
 
 	async getProLabFlags(id) {
@@ -411,6 +419,10 @@ class HtbApiConnector {
 
 	async getAllProlabs() {
 		let entries = await this.getAllProLabEntries()
+		if (!entries.length) {
+			log.info("No pro lab entries to fetch")
+			return {}
+		}
 		log.info("Fetching pro lab data", { count: entries.length })
 		let flags = await Promise.all(entries.map(entry => this.getProLabFlags(entry.id)
 			.then(flags => ({ flags: flags }))
@@ -474,7 +486,27 @@ class HtbApiConnector {
 	}
 
 	getUniversityProfile(universityId) {
-		return this.htbApiGet("rankings/universities").then(e => Object.values(e.data).find(uni => uni.id == universityId) || null)
+		return this.getUniversityProfileById(universityId)
+			.catch(() => this.htbApiGet("rankings/universities")
+				.then(e => Object.values(e.data).find(uni => uni.id == universityId) || null))
+	}
+
+	getUniversityProfileById(universityId) {
+		return this.htbApiGet(`university/profile/${universityId}`)
+			.then(res => res?.data ?? res?.profile ?? res)
+	}
+
+	getUniversityMembers(universityId, excludedIds = []) {
+		return this.htbApiGet(`university/members/${universityId}`)
+			.then(res => {
+				const members = res?.data ?? res?.message ?? res ?? []
+				if (!Array.isArray(members)) return []
+				return members.filter(member => !excludedIds.includes(member.id) && member.role != "pending")
+			})
+	}
+
+	getApiToken() {
+		return this.API_TOKEN
 	}
 
 	getMemberIdFromUsername(username = "ThisUserCouldNotPossiblyExist") {
