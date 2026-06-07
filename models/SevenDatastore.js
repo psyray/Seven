@@ -182,76 +182,97 @@ class SevenDatastore {
 		// console.warn("This is a placeholder function. Override it from bot.js with the method from 'Send' module")
 	}
 
-	logUpdateProgress(msg) {
-		log.info(msg)
+	logUpdateProgress(msg, meta = {}) {
+		log.info(msg, meta)
 		this.informAdminViaDm("[Data Update]", msg)
+	}
+
+	logUpdatePhase(phase, message, meta = {}) {
+		log.info(`[${phase}] ${message}`, meta)
 	}
 
 	async update() {
 		if (!this.UPDATE_LOCK) {
 			this.UPDATE_LOCK = true
-			this.logUpdateProgress(
-				"[API CONNECTOR]::: Update lock engaged. Beginning update attempt."
-			)
+			const updateStarted = Date.now()
+			this.logUpdateProgress("HTB data update started")
 			try {
-				console.time("Data update took")
 				/* LEGACY STUFF FOR PARSING / PUSHER CONNECT / DATA ABT TEAMS: */
+				const v3Started = Date.now()
+				this.logUpdatePhase("1/7", "Refreshing V3 session (CSRF / Pusher auth)")
 				try {
 					await this.V3API.init().catch(console.error)
 				} catch (error) {
-					console.error(error)
+					log.error("V3 session refresh failed", { message: error.message })
 				}
 				var SESH = this.V3API.SESSION
-				if (Object.keys(SESH).length) log.info("Got a logged in V3 session")
+				log.info("V3 session ready", {
+					hasSession: Object.keys(SESH).length > 0,
+					hasCsrf: Boolean(this.V3API.CSRF_TOKEN),
+					durationMs: Date.now() - v3Started,
+				})
 
-				// var MACHINES_V3 = await this.V3API.getMachines()
 				var machineSubmissions, mSObj
-
+				const submissionsStarted = Date.now()
+				this.logUpdatePhase("2/7", "Fetching machine submissions (legacy HTML scrape)")
 				try {
 					machineSubmissions = await this.V3API.getMachineSubmissions()
 					mSObj = machineSubmissions.length
 						? H.arrToObj(machineSubmissions, "id")
 						: {}
+					log.info("Machine submissions fetched", {
+						count: machineSubmissions.length,
+						durationMs: Date.now() - submissionsStarted,
+					})
 				} catch (error) {
-					console.warn(error)
+					log.warn("Machine submissions fetch failed — continuing without them", {
+						message: error.message,
+						durationMs: Date.now() - submissionsStarted,
+					})
 					mSObj = {}
 				}
 
-
-
-				console.time("Getting machines [V4] took")
+				const machinesStarted = Date.now()
+				this.logUpdatePhase("3/7", "Fetching machines (V4 API — slow step, rate-limited by HTB)")
 				var MACHINES_V4 = await this.V4API.getAllCompleteMachineProfiles()
-				console.timeEnd("Getting machines [V4] took")
-
+				log.info("Fetching starting point machines")
 				this.MISC.STARTING_POINT_MACHINES = await this.V4API.getAllStartingPointMachines()
 
 				this.MACHINES = Object.assign({}, mSObj, MACHINES_V4, this.MISC.STARTING_POINT_MACHINES)
 
-				console.warn(
-					`[APIv4]::: Got ${Object.keys(this.MACHINES).length
-					} machines (Including submissions)...`
-				)
+				log.info("Machines collected", {
+					total: Object.keys(this.MACHINES).length,
+					submissions: Object.keys(mSObj).length,
+					v4Profiles: Object.keys(MACHINES_V4).length,
+					startingPoint: Object.keys(this.MISC.STARTING_POINT_MACHINES).length,
+					durationMs: Date.now() - machinesStarted,
+				})
 
-
-				/* API v4 DATA COLLECTION (Who's feeling sexy now..?!) */
+				const specialsStarted = Date.now()
+				this.logUpdatePhase("4/7", "Fetching fortresses, endgames and pro labs")
 				this.MISC.FORTRESSES = await this.V4API.getAllFortresses()
 				this.MISC.ENDGAMES = await this.V4API.getAllEndgames()
 				this.MISC.PROLABS = await this.V4API.getAllProlabs()
+				log.info("Special targets collected", {
+					fortresses: Object.keys(this.MISC.FORTRESSES).length,
+					endgames: Object.keys(this.MISC.ENDGAMES).length,
+					prolabs: Object.keys(this.MISC.PROLABS).length,
+					durationMs: Date.now() - specialsStarted,
+				})
 
-
-				console.time("Getting machine tags [V4] took")
+				const tagsStarted = Date.now()
+				this.logUpdatePhase("5/7", "Fetching machine tags")
 				var mt = await this.V4API.getMachineTags()
 				this.MISC.MACHINE_TAGS = mt
-				console.timeEnd("Getting machine tags [V4] took")
-				console.warn(
-					`[APIv4]::: Got ${Object.keys(this.MISC.MACHINE_TAGS).length
-					} machine tag categories...`
-				)
+				log.info("Machine tags collected", {
+					categories: Object.keys(this.MISC.MACHINE_TAGS).length,
+					durationMs: Date.now() - tagsStarted,
+				})
 
-
-
-				console.time("Getting team / uni data [V4] took")
+				const teamStarted = Date.now()
+				this.logUpdatePhase("6/7", "Fetching team / university data and member profiles")
 				if (process.env.HTB_TEAM_ID) {
+					log.info("Using HTB_TEAM_ID", { teamId: process.env.HTB_TEAM_ID })
 					this.TEAM_STATS = await this.V4API.getCompleteTeamProfile(
 						process.env.HTB_TEAM_ID
 					)
@@ -260,11 +281,13 @@ class SevenDatastore {
 						process.env.HTB_TEAM_ID,
 						Object.keys(this.TEAM_MEMBERS_IGNORED)
 					)
+					log.info("Team members listed", { count: TEAM_MEMBERS_BASE.length })
 					this.TEAM_MEMBERS =
 						await this.V4API.getCompleteMemberProfilesByMemberPartials(
 							TEAM_MEMBERS_BASE
 						)
 				} else if (process.env.HTB_UNIVERSITY_ID) {
+					log.info("Using HTB_UNIVERSITY_ID", { universityId: process.env.HTB_UNIVERSITY_ID })
 					var UNI_MEMBER_IDS = await this.V3API.getUniversityMemberIds(
 						SESH,
 						process.env.HTB_UNIVERSITY_ID,
@@ -298,23 +321,26 @@ class SevenDatastore {
 					)
 					// this.TEAM_MEMBERS = await this.V4API.getCompleteMemberProfilesByMemberPartials(TEAM_MEMBERS_BASE)
 				} else {
-					console.warn(
-						"[API CONNECTOR]::: No ID (Team or University) was specified!! Please add a definition for either 'HTB_UNIVERSITY_ID' or 'HTB_TEAM_ID' in your environment variables."
-					)
+					log.warn("No HTB_TEAM_ID or HTB_UNIVERSITY_ID configured — skipping team data")
 				}
 
-				console.timeEnd("Getting team / uni data [V4] took")
-				console.warn(
-					`[APIv4]::: Got ${Object.keys(this.TEAM_MEMBERS).length
-					} team member profiles...`
-				)
+				log.info("Team data collected", {
+					teamName: this.TEAM_STATS?.name || null,
+					members: Object.keys(this.TEAM_MEMBERS).length,
+					durationMs: Date.now() - teamStarted,
+				})
 				var names = this.vTM.map((e) => e.name.toLowerCase())
-				console.time("Getting challenge profiles and tags [V4] took")
+
+				const challengesStarted = Date.now()
+				this.logUpdatePhase("7/7", "Fetching challenges and categories")
 				this.CHALLENGES = await this.V4API.getAllCompleteChallengeProfiles()
 				this.MISC.CHALLENGE_CATEGORIES =
 					await this.V4API.getChallengeCategories()
-
-				console.timeEnd("Getting challenge profiles and tags [V4] took")
+				log.info("Challenges collected", {
+					challenges: Object.keys(this.CHALLENGES).length,
+					categories: Object.keys(this.MISC.CHALLENGE_CATEGORIES || {}).length,
+					durationMs: Date.now() - challengesStarted,
+				})
 
 				// this.MISC.SPECIALS = await this.V3API.getSpecials()
 				// console.timeEnd("Getting specials took")
@@ -323,11 +349,7 @@ class SevenDatastore {
 				// )
 
 
-				console.warn(
-					`[APIv4]::: Got ${this?.kC?.length} challenges spanning ${Object.keys(this?.MISC?.CHALLENGE_CATEGORIES || {}).length
-					} categories...`
-				)
-				console.warn(`[APIv4]::: Got team info for "${this?.TEAM_STATS?.name}"`)
+				this.logUpdatePhase("sync", "Updating Dialogflow entities")
 				try {
 					dFlowEnt.updateEntity(
 						Object.values(this.MISC.PROLABS)
@@ -391,7 +413,7 @@ class SevenDatastore {
 						"memberName"
 					)
 				} catch (error) {
-					console.warn("Had an issue processing DialogFlow entities.\n", error)
+					log.warn("Dialogflow entity sync failed", { message: error.message })
 				}
 
 				/* TO HANDLE EXPORTS WITHOUT DB (USING LOCAL JSON FILES ( useful for dev )):::
@@ -403,22 +425,23 @@ class SevenDatastore {
 							\  exportData(TEAM_STATS, "team_stats.json")  */
 				this.LAST_UPDATE = new Date()
 				this.UPDATE_LOCK = false
-				log.info("Update completed", {
+				this.logUpdateProgress("HTB data update completed", {
 					machines: Object.keys(this.MACHINES).length,
 					challenges: Object.keys(this.CHALLENGES).length,
 					members: Object.keys(this.TEAM_MEMBERS).length,
 					teamName: this.TEAM_STATS?.name || null,
+					durationMs: Date.now() - updateStarted,
 				})
-				console.timeEnd("Data update took")
 			} catch (error) {
-				log.error("UPDATE FAILED", { message: error.message, stack: error.stack })
+				log.error("HTB data update failed", {
+					message: error.message,
+					stack: error.stack,
+					durationMs: Date.now() - updateStarted,
+				})
 				this.UPDATE_LOCK = false
-				// throw(error)
 			}
 		} else {
-			console.warn(
-				"[API CONNECTOR]::: WARNING: DATA UPDATE NOT STARTED, AS ONE IS ALREADY IN PROGRESS."
-			)
+			log.warn("HTB data update skipped — another update is already in progress")
 		}
 	}
 

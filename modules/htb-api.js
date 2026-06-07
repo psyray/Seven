@@ -6,6 +6,15 @@ const { HTB_API_BASE } = require("../config/htb.js")
 const { createLogger } = require("../helpers/logger.js")
 
 const log = createLogger("htb-api")
+const VERBOSE_API_REQUESTS = process.env.HTB_API_LOG_REQUESTS === "true"
+const PROGRESS_EVERY = Number(process.env.HTB_LOG_PROGRESS_EVERY) || 25
+
+function logBatchProgress(label, current, total) {
+	if (current === 1 || current === total || current % PROGRESS_EVERY === 0) {
+		const pct = total ? Math.round((current / total) * 100) : 0
+		log.info(`${label}: ${current}/${total} (${pct}%)`)
+	}
+}
 
 const setTypeForValues = (type, objectMap) => {
 	Object.keys(objectMap).map(key => (objectMap[key].type = type))
@@ -134,12 +143,17 @@ class HtbApiConnector {
 					const rLeft = H.sAcc(response, "headers", "x-ratelimit-remaining") || 60
 					this.updateThrottle(endpoint, rLimit, rLeft)
 
-					log.info(`GET ${endpointPath}`, {
+					const requestMeta = {
 						status: response.status,
 						durationMs,
 						rateLimitRemaining: rLeft,
 						rateLimitMax: rLimit,
-					})
+					}
+					if (VERBOSE_API_REQUESTS) {
+						log.info(`GET ${endpointPath}`, requestMeta)
+					} else {
+						log.debug(`GET ${endpointPath}`, requestMeta)
+					}
 
 					if (parseText) {
 						if (isHtmlResponse(response.text)) {
@@ -199,13 +213,17 @@ class HtbApiConnector {
 		let currentPage = 1
 		let lastPage = 1
 
+		log.info(`Fetching machine pages from ${endpoint}`)
 		do {
 			const response = await this.htbApiGet(`${endpoint}?per_page=${perPage}&page=${currentPage}`)
-			allMachines = allMachines.concat(extractPaginatedItems(response))
+			const pageItems = extractPaginatedItems(response)
+			allMachines = allMachines.concat(pageItems)
 			lastPage = response?.meta?.last_page ?? 1
+			log.info(`Machine page ${currentPage}/${lastPage}`, { endpoint, pageCount: pageItems.length, totalSoFar: allMachines.length })
 			currentPage++
 		} while (currentPage <= lastPage)
 
+		log.info(`Machine list complete`, { endpoint, total: allMachines.length })
 		return allMachines
 	}
 
@@ -214,6 +232,7 @@ class HtbApiConnector {
 	}
 
 	async getAllStartingPointMachines() {
+		log.info("Fetching starting point machines (tiers 1-3)")
 		var t1 = await this.getStartingPointMachinesForTier(1)
 		var t2 = await this.getStartingPointMachinesForTier(2)
 		var t3 = await this.getStartingPointMachinesForTier(3)
@@ -257,17 +276,28 @@ class HtbApiConnector {
 	}
 
 	async getAllCompleteMachineProfiles() {
+		log.info("Building complete machine profiles (list + per-machine detail)")
 		var machines = await this.getAllMachinesFast()
 		const ids = Object.values(machines).map(machine => machine.id)
+		log.info("Machine IDs collected", { count: ids.length })
 		return this.getCompleteMachineProfilesByIds(ids).then(profiles => {
 			Object.keys(profiles).map(mId => profiles[mId] = H.combine([machines[mId], profiles[mId]]))
+			log.info("Complete machine profiles ready", { count: Object.keys(profiles).length })
 			return profiles
 		})
 	}
 
-	getCompleteMachineProfilesByIds(machineIds) {
-		return Promise.all(machineIds.map(id => this.getCompleteMachineProfileById(id)))
-			.then(machines => setTypeForValues("machine", H.arrToObj(machines.map(e => e.info), "id")))
+	async getCompleteMachineProfilesByIds(machineIds) {
+		const total = machineIds.length
+		let done = 0
+		log.info(`Fetching machine profiles`, { total })
+		const machines = await Promise.all(machineIds.map(async (id) => {
+			const profile = await this.getCompleteMachineProfileById(id)
+			done++
+			logBatchProgress("Machine profiles", done, total)
+			return profile
+		}))
+		return setTypeForValues("machine", H.arrToObj(machines.map(e => e.info), "id"))
 	}
 
 	searchChallengeByExactName(name) {
@@ -295,16 +325,27 @@ class HtbApiConnector {
 		return this.htbApiGet(`challenge/info/${id}`)
 	}
 
-	getCompleteChallengeProfilesByIds(challengeIds) {
-		return Promise.all(challengeIds.map(id => this.getCompleteChallengeProfileById(id)))
-			.then(challenges => setTypeForValues("challenge", H.arrToObj(challenges.map(e => e.challenge), "id")))
+	async getCompleteChallengeProfilesByIds(challengeIds) {
+		const total = challengeIds.length
+		let done = 0
+		log.info(`Fetching challenge profiles`, { total })
+		const challenges = await Promise.all(challengeIds.map(async (id) => {
+			const profile = await this.getCompleteChallengeProfileById(id)
+			done++
+			logBatchProgress("Challenge profiles", done, total)
+			return profile
+		}))
+		return setTypeForValues("challenge", H.arrToObj(challenges.map(e => e.challenge), "id"))
 	}
 
 	async getAllCompleteChallengeProfiles() {
+		log.info("Building complete challenge profiles (list + per-challenge detail)")
 		var challenges = await this.getAllChallengesFast()
 		const ids = Object.values(challenges).map(challenge => challenge.id)
+		log.info("Challenge IDs collected", { count: ids.length })
 		return this.getCompleteChallengeProfilesByIds(ids).then(profiles => {
 			Object.keys(profiles).map(cId => profiles[cId] = H.combine([challenges[cId], profiles[cId]]))
+			log.info("Complete challenge profiles ready", { count: Object.keys(profiles).length })
 			return profiles
 		})
 	}
@@ -323,7 +364,9 @@ class HtbApiConnector {
 
 	async getAllFortresses() {
 		let entries = await this.getAllFortressEntries()
+		log.info("Fetching fortress profiles", { count: entries.length })
 		let profiles = await Promise.all(entries.map(entry => this.getFortressProfile(entry.id)))
+		log.info("Fortress profiles ready", { count: profiles.length })
 		return H.arrToObj(entries.map((e, i) => H.combine([e, profiles[i]])), "id")
 	}
 
@@ -341,10 +384,12 @@ class HtbApiConnector {
 
 	async getAllEndgames() {
 		let entries = await this.getAllEndgameEntries()
+		log.info("Fetching endgame profiles and flags", { count: entries.length })
 		let profiles = await Promise.all(entries.map(entry => this.getEndgameProfile(entry.id)))
 		let flags = await Promise.all(entries.map(entry => this.getEndgameFlags(entry.id)
 			.then(flags => ({ flags: flags }))
 		))
+		log.info("Endgame data ready", { count: entries.length })
 		return H.arrToObj(entries.map((e, i) => H.combine([e, flags[i], profiles[i]])), "id")
 	}
 
@@ -366,11 +411,13 @@ class HtbApiConnector {
 
 	async getAllProlabs() {
 		let entries = await this.getAllProLabEntries()
+		log.info("Fetching pro lab data", { count: entries.length })
 		let flags = await Promise.all(entries.map(entry => this.getProLabFlags(entry.id)
 			.then(flags => ({ flags: flags }))
 		))
 		let infos = await Promise.all(entries.map(entry => this.getProLabInfo(entry.id)))
 		let overviews = await Promise.all(entries.map(entry => this.getProLabOverview(entry.id)))
+		log.info("Pro lab data ready", { count: entries.length })
 		return H.arrToObj(entries.map((e, i) => H.combine([e, flags[i], infos[i], overviews[i]])), "id")
 	}
 
@@ -470,9 +517,18 @@ class HtbApiConnector {
 			.then(results => setTypeForValues("member", H.arrToObj(results, "id")))
 	}
 
-	getCompleteMemberProfilesByMemberPartials(members) {
-		return Promise.all(members.map(member => this.getCompleteMemberProfileByMemberPartial(member)))
-			.then(results => setTypeForValues("member", H.arrToObj(results, "id")))
+	async getCompleteMemberProfilesByMemberPartials(members) {
+		const total = members.length
+		let done = 0
+		log.info("Fetching complete team member profiles", { total })
+		const results = await Promise.all(members.map(async (member) => {
+			const profile = await this.getCompleteMemberProfileByMemberPartial(member)
+			done++
+			logBatchProgress("Team member profiles", done, total)
+			return profile
+		}))
+		log.info("Team member profiles ready", { count: results.length })
+		return setTypeForValues("member", H.arrToObj(results, "id"))
 	}
 
 	getMemberAchievementChart(memberId, term) {

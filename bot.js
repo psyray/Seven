@@ -314,13 +314,16 @@ async function main() {
 	if (!DEV_MODE_ON) {
 		await DAT.syncAgent()
 		try {
-			log.info("Starting initial HTB data refresh")
+			log.info("Starting initial HTB data refresh (first run can take 30-60+ min due to HTB rate limits)")
+			const refreshStarted = Date.now()
 			await refresh()
 			await updateCache()
 			log.info("Initial data refresh completed", {
 				machines: Object.keys(DAT.MACHINES).length,
 				challenges: Object.keys(DAT.CHALLENGES).length,
 				members: Object.keys(DAT.TEAM_MEMBERS).length,
+				lastUpdate: DAT.LAST_UPDATE,
+				durationMs: Date.now() - refreshStarted,
 			})
 		} catch (error) {
 			log.error("Initial data refresh failed", { message: error.message, stack: error.stack })
