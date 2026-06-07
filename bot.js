@@ -66,10 +66,26 @@ const EGI = new HtbEmbeds(DAT, E) 			// Give Embed Constructor access to the dat
 const SEND = new Send(client, EGI)
 
 /* SETUP DB IMPORT TO RESTORE LAST GOOD STATE */
-const cn = {
-	connectionString: process.env.DATABASE_URL,
-	ssl: (process.env.DATABASE_URL.includes("localhost") || process.env.DATABASE_URL.includes("captain") ? false : { rejectUnauthorized: false })
+function getDbConfig() {
+	if (process.env.PGHOST) {
+		const sslDisabled = ["localhost", "captain", "postgres"].includes(process.env.PGHOST)
+		return {
+			host: process.env.PGHOST,
+			port: Number(process.env.PGPORT) || 5432,
+			database: process.env.PGDATABASE,
+			user: process.env.PGUSER,
+			password: process.env.PGPASSWORD,
+			ssl: sslDisabled ? false : { rejectUnauthorized: false }
+		}
+	}
+	const dbUrl = process.env.DATABASE_URL || ""
+	const dbSslDisabled = ["localhost", "captain", "@postgres:"].some((host) => dbUrl.includes(host))
+	return {
+		connectionString: process.env.DATABASE_URL,
+		ssl: dbSslDisabled ? false : { rejectUnauthorized: false }
+	}
 }
+const cn = getDbConfig()
 
 const DB_FIELDNAMES_AUTO = ["MACHINES", "CHALLENGES", "FORTRESSES", "ENDGAMES", "PROLABS", "TEAM_MEMBERS", "TEAM_MEMBERS_IGNORED", "TEAM_STATS", "DISCORD_LINKS", "MISC"]
 const db = pgp(cn)

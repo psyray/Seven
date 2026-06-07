@@ -1,0 +1,6 @@
+# Copy to docker-compose.override.yml for local dev inside Docker (file is gitignored).
+services:
+  seven:
+    environment:
+      IS_DEV_INSTANCE: "true"
+      NODE_ENV: development

@@ -1,0 +1,65 @@
+# POSTGRES_PASSWORD is applied only on first init of volume seven_pgdata.
+# Changing .env later does not update an existing DB — run: npm run docker:reset-db
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-seven}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-seven}
+    volumes:
+      - seven_pgdata:/var/lib/postgresql/data
+    networks:
+      - seven_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-seven} -d ${POSTGRES_DB:-seven}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  seven:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER:-seven}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-change_me}
+      PGDATABASE: ${POSTGRES_DB:-seven}
+      LOG_DIR: /var/log/sevenbot
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - seven_logs:/var/log/sevenbot
+    networks:
+      - seven_net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=256M
+    shm_size: "256mb"
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'node bot.js' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+networks:
+  seven_net:
+    driver: bridge
+
+volumes:
+  seven_pgdata:
+  seven_logs:

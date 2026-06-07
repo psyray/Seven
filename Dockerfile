@@ -1,39 +1,30 @@
-FROM node:14.4.0-alpine
+FROM node:20-bookworm-slim
 
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
-    nss \
-    freetype \
-    harfbuzz \
+    fonts-freefont-ttf \
     ca-certificates \
-    ttf-freefont \
-    nodejs \
-    npm
+    dumb-init \
+    procps \
+  && rm -rf /var/lib/apt/lists/*
 
-# Tell Puppeteer to skip installing Chrome. We'll be using the installed package.
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
+    NODE_ENV=production \
+    LOG_DIR=/var/log/sevenbot \
+    ACCEPT_HIGHCHARTS_LICENSE=YES
 
-# Puppeteer v10.0.0 works with Chromium 92.
-RUN npm install puppeteer@10.0.0
+WORKDIR /app
 
-# Create app directory
-WORKDIR /usr/src/app
-
-# Install app dependencies
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
-# where available (npm@5+)
 COPY package*.json ./
+RUN npm ci --omit=dev
 
-ENV ACCEPT_HIGHCHARTS_LICENSE=YES
-
-# RUN npm install
-# If you are building your code for production
-RUN npm ci --only=production
-
-# Bundle app source
 COPY . .
 
-EXPOSE 666
-CMD [ "node", "bot.js" ]
+RUN addgroup --system seven && adduser --system --ingroup seven seven \
+  && mkdir -p /var/log/sevenbot && chown -R seven:seven /app /var/log/sevenbot
 
+USER seven
+
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "bot.js"]

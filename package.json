@@ -4,7 +4,13 @@
 	"version": "1.0.1",
 	"main": "bot.js",
 	"scripts": {
-		"start": "node bot.js"
+		"start": "node bot.js",
+		"docker:build": "docker compose build",
+		"docker:up": "docker compose up -d",
+		"docker:down": "docker compose down",
+		"docker:reset-db": "docker compose down -v",
+		"docker:logs": "docker compose logs -f seven",
+		"docker:restart": "docker compose restart seven"
 	},
 	"engines": {
 		"node": ">=16.x"
