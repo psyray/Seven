@@ -35,6 +35,9 @@ const { SevenDatastore } = require("./models/SevenDatastore.js")
 const { Send } = require("./modules/send.js")
 const { HTBEmoji } = require("./helpers/emoji.js")
 const { generateBinaryClockImage } = require("./helpers/binclock")
+const { createLogger } = require("./helpers/logger.js")
+
+const log = createLogger("bot")
 
 /*** HANDLE DEVELOPMENT INSTANCE CASE ***/
 
@@ -283,8 +286,7 @@ async function main() {
 	
 	DAT.TEAM_STATS.teamFounder = process.env.FOUNDER_HTB_ID
 	await DAT.init()
-	// await DAT.syncAgent()
-	var HTB_PUSHER_OWNS_SUBSCRIPTION = new HtbPusherSubscription("97608bf7532e6f0fe898",
+	HTB_PUSHER_OWNS_SUBSCRIPTION = new HtbPusherSubscription("97608bf7532e6f0fe898",
 		[
 			{ channel: "owns-channel", event: "display-info" },
 			{ channel: "notifications-channel", event: "display-notifications" },
@@ -292,16 +294,31 @@ async function main() {
 			{ channel: "shoutbox-channel", event: "display-shout" },
 			{ channel: "joins-channel", event: "display-info" }
 		], DAT.V3API.CSRF_TOKEN)
-	// refresh().then(console.log("Initial update completed!"))
 
 	if (!DEV_MODE_ON) {
 		await DAT.syncAgent()
-		setInterval(async () => {
+		try {
+			log.info("Starting initial HTB data refresh")
 			await refresh()
-			console.log("Data refresh completed!")
-			var updated = await updateCache()
-			if (updated) { console.log("Updated the DB...") }
-		}, 1 * 60 * 60 * 1000) // Lower frequency of update to once every hour after rate limiter issue
+			await updateCache()
+			log.info("Initial data refresh completed", {
+				machines: Object.keys(DAT.MACHINES).length,
+				challenges: Object.keys(DAT.CHALLENGES).length,
+				members: Object.keys(DAT.TEAM_MEMBERS).length,
+			})
+		} catch (error) {
+			log.error("Initial data refresh failed", { message: error.message, stack: error.stack })
+		}
+		setInterval(async () => {
+			try {
+				await refresh()
+				log.info("Scheduled data refresh completed")
+				var updated = await updateCache()
+				if (updated) { log.info("DB backup updated after scheduled refresh") }
+			} catch (error) {
+				log.error("Scheduled data refresh failed", { message: error.message })
+			}
+		}, 1 * 60 * 60 * 1000)
 	}
 
 	HTB_PUSHER_OWNS_SUBSCRIPTION.on("pusherevent", async message => {
@@ -644,13 +661,25 @@ async function forceUpdate(message) {
 
 async function admin_clearCached(message) {
 	if (isAdmin(message.author)) {
-		SEND.human(message, "Clearing the in-memory HTB data (not including ignored member or discord link settings)", false)
+		SEND.human(message, "Clearing in-memory HTB data and running a full refresh (DB backup is not wiped).", false)
+		log.warn("Admin cache clear requested", { user: message.author.id })
 		DAT.MISC = {}
 		DAT.TEAM_MEMBERS = {}
 		DAT.TEAM_STATS = {}
 		DAT.MACHINES = {}
 		DAT.CHALLENGES = {}
-		updateCache(["MACHINES", "CHALLENGES", "TEAM_MEMBERS", "TEAM_STATS", "MISC"]).then(SEND.human(message, H.any("Done!"), false))
+		try {
+			await refresh()
+			await updateCache()
+			await SEND.human(message, H.any("Done! Cache cleared and data refreshed from HTB."), false)
+			log.info("Admin cache clear completed with refresh", {
+				machines: Object.keys(DAT.MACHINES).length,
+				members: Object.keys(DAT.TEAM_MEMBERS).length,
+			})
+		} catch (error) {
+			log.error("Admin cache clear refresh failed", { message: error.message })
+			await SEND.human(message, "Cache cleared in memory but HTB refresh failed. Check sevenbot-error.log and regenerate HTB_V4_TOKEN if needed.", false)
+		}
 	} else {
 		SEND.human(message, `You're not my boss! 🤔\nno can do.\nTry asking <@!${JSON.parse(process.env.ADMIN_DISCORD_IDS)[0]}>!`)
 	}
@@ -700,7 +729,7 @@ async function handleMessage(message) {
 						case "linkDiscord": linkDiscord(message, (P.uid ? "uid" : "uname"), (P.uid ? P.uid : P.username)); break
 						case "unforgetMe": unignoreMember(P.uid); SEND.human(message, result.fulfillmentText, true); break
 						case "getTime": SEND.embed(message, EGI.binClock(await generateBinaryClockImage())); break
-						case "getTeamBadge": SEND.human(message, F.noncifyUrl(`https://www.hackthebox.com/badge/team/image/${DAT.TEAM_STATS.id}`), true).then(() => SEND.human(message, result.fulfillmentText, true)); break
+						case "getTeamBadge": SEND.human(message, F.noncifyUrl(`https://app.hackthebox.com/badge/team/image/${DAT.TEAM_STATS.id}`), true).then(() => SEND.human(message, result.fulfillmentText, true)); break
 						case "getTeamInfo": SEND.embed(message, EGI.teamInfo()); break
 						case "getTeamLeaders": SEND.embed(message, EGI.teamLeaderboard()); break
 						case "getTeamLeader": sendTeamLeaderMsg(message, result.fulfillmentText); break

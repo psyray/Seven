@@ -323,6 +323,12 @@ class HtbEmbeds {
 
 		var TEAM_EMBED = this.TEAM_INFO_BASE
 
+		if (!this.ds.TEAM_STATS?.type) {
+			return TEAM_EMBED
+				.setTitle("Team data unavailable")
+				.setDescription("HTB team data is not loaded yet. Try `seven force update` or wait for the next scheduled sync.")
+		}
+
 		/** TEAM SUMMARY EMBED CONSTRUCTOR **/
 		if (this.ds.TEAM_STATS.type == "team") {
 			const { id: tid, twitter,facebook,discord, motto, description, name:tname, country_code:cc, country_name:cn, rank, points, respects, captain, user_owns, system_owns, first_bloods, avatar_url: tavatar} = this.ds.TEAM_STATS
@@ -370,6 +376,11 @@ class HtbEmbeds {
 	}
 
 	teamRank() {
+		if (!this.ds.TEAM_STATS?.name) {
+			return this.TEAM_INFO_BASE
+				.setTitle("Team rank unavailable")
+				.setDescription("HTB team data is not loaded yet. Try `seven force update` or wait for the next scheduled sync.")
+		}
 		return this.TEAM_INFO_BASE
 			.attachFiles(new Attachment("./static/img/ui/rank.png", "rank.png"))
 			.setAuthor(this.ds.TEAM_STATS.name, "attachment://rank.png", F.teamProfileUrl(this.ds.TEAM_STATS))
@@ -379,11 +390,17 @@ class HtbEmbeds {
 	}
 
 	teamLeaderboard() {
+		if (!this.ds.TEAM_STATS?.name || !Object.keys(this.ds.TEAM_MEMBERS).length) {
+			return this.TEAM_INFO_BASE
+				.setTitle("Leaderboard unavailable")
+				.setDescription("No team member data is loaded yet. Try `seven force update` or wait for the next scheduled sync.")
+		}
 		var leaderLinkArray = F.mdItemizeList((this.ds.getMdLinksForUids(this.ds.getTopMembers(60), false, "points")))
 		var embed = this.TEAM_INFO_BASE
 			.attachFiles(new Attachment("./static/img/ui/rank.png", "rank.png"))
 			.setAuthor(this.ds.TEAM_STATS.name, "attachment://rank.png", F.teamProfileUrl(this.ds.TEAM_STATS))
 			.setTitle("Leaderboard")
+			.setDescription("Top team members by points.")
 			.setThumbnail(F.avatarFullUrl(this.ds.getMemberById(this.ds.getTopMembers(1))))
 			.setFooter("ℹ️  Hover over a name to see individual points [Desktop]")
 		var chunkedFields = H.chunk(leaderLinkArray, 10)

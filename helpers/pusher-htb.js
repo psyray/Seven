@@ -6,7 +6,11 @@ const { JSDOM } = require("jsdom")
 const EventEmitter = require("events")
 const Pusher = require("pusher-client")
 const { Helpers: H } = require("../helpers/helpers.js")
+const { HTB_APP_BASE } = require("../config/htb.js")
+const { createLogger } = require("../helpers/logger.js")
 const TD = require("turndown")
+
+const log = createLogger("pusher-htb")
 
 function cleanAttribute (attribute) {
 	return attribute ? attribute.replace(/(\n+\s*)+/g, "\n") : ""
@@ -164,7 +168,7 @@ class HtbPusherSubscription extends EventEmitter {
 	constructor(apiToken, bindings, csrfToken) {
 		super()
 		this.client = new Pusher(apiToken, {
-			authEndpoint: "https://www.hackthebox.com/pusher/auth",
+			authEndpoint: `${HTB_APP_BASE}/pusher/auth`,
 			auth: { "X-CSRF-Token": csrfToken },
 			authTransport: "ajax",
 			cluster: "eu",
@@ -187,8 +191,9 @@ class HtbPusherSubscription extends EventEmitter {
 			this.channels.push(channel)
 		}
 		
+		log.info("Pusher client initialized", { authEndpoint: `${HTB_APP_BASE}/pusher/auth` })
 		this.client.connection.bind("state_change", function (states) {
-			console.log("[PUSHER]::: Client state changed from " + states.previous + " to " + states.current)
+			log.info(`Client state changed from ${states.previous} to ${states.current}`)
 		})
 	}
 
@@ -198,6 +203,7 @@ class HtbPusherSubscription extends EventEmitter {
    */
 	alertSeven(message) {
 		if (message) {
+			log.debug("Pusher event received", { uid: message.uid, type: message.type, target: message.target, channel: message.channel })
 			this.emit("pusherevent", message)
 		}
 	}

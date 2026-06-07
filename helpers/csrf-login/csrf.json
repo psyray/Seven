@@ -1,5 +1,5 @@
 {
-    "host": "https://www.hackthebox.com:443",
+    "host": "https://app.hackthebox.com:443",
     "loginFormId": "loginForm",
     "tokenFieldName": "_token",
     "loginPath": "/login"

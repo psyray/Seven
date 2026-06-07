@@ -6,7 +6,11 @@ const { HtbMachine, HtbMaker } = require("../helpers/classes.js")
 const jp = require("jsonpath")
 const { Format: F } = require("../helpers/format.js")
 const csrfLogin = require("../helpers/csrf-login/csrf-login-override")
+const { HTB_APP_BASE } = require("../config/htb.js")
+const { createLogger } = require("../helpers/logger.js")
 const { id } = require("date-fns/locale")
+
+const log = createLogger("htb-legacy")
 
 function parseSingleDate(date,) { // Parse date to timestamp (millis) for various formats used on HTB site, based on length
 	if (date) {
@@ -57,6 +61,11 @@ class HtbLegacyConnector {
 	async init(){
 		this.SESSION = await this.getSession()
 		this.CSRF_TOKEN = this.grabCsrfFromJar(this.SESSION)
+		if (this.CSRF_TOKEN) {
+			log.info("CSRF session acquired for Pusher auth")
+		} else {
+			log.error("CSRF session login failed — Pusher notifications may not work")
+		}
 	}
 
 	getMachines() {
@@ -144,14 +153,14 @@ class HtbLegacyConnector {
 			var $ = require("jquery")(new JSDOM(response.body).window)
 			if ($("tbody")[0].childElementCount > 0) {
 				var trs = $($(".table tr")[1])
-				var mids = trs?.find("a[href^='https://www.hackthebox.com/home/machines/profile/']")
+				var mids = trs?.find("a[href*='/machines/profile/'], a[href*='/home/machines/profile/']")
 				var urmid = mids[0]?.href?.substring(49)
 				var oldmid = mids[1]?.href?.substring(49)
 				var name = mids[0]?.innerHTML
 				var rname = mids[1]?.innerHTML
-				var thumb = trs.find("img[src^='https://www.hackthebox.com/storage/avatars']")[0]?.src
+				var thumb = trs.find("img[src*='/storage/avatars']")[0]?.src
 				var releaseDate = parseSingleDate($($(".table tr")[1]).find(":contains('UTC')")[0]?.innerHTML)
-				var makers = trs.find("a[href^='https://www.hackthebox.com/home/users/profile/']")
+				var makers = trs.find("a[href*='/users/profile/'], a[href*='/home/users/profile/']")
 				var maker = makers[0]?.innerHTML
 				var makerId = makers[0]?.href?.substring(46)
 				var maker2 = null
@@ -536,12 +545,17 @@ class HtbLegacyConnector {
 		this.CSRF_TOKEN = this.grabCsrfFromJar(this.SESSION)
 	}
 	grabCsrfFromJar(session) {
-		try {
-			return session.jar._jar.store.idx["www.hackthebox.com"]["/"]["csrftoken"].value
-		} catch (error) {
-			console.error(error)
-			return ""
+		const hosts = ["app.hackthebox.com", "www.hackthebox.com"]
+		for (const host of hosts) {
+			try {
+				const token = session.jar._jar.store.idx[host]["/"]["csrftoken"].value
+				if (token) return token
+			} catch (error) {
+				// try next host
+			}
 		}
+		log.error("Could not read csrftoken from session cookie jar", { hosts })
+		return ""
 	}
 
 	getUserProfile(id, session) {
@@ -580,7 +594,7 @@ class HtbLegacyConnector {
 			//console.log("Parsing owns for uid: " + uid)
 			try {
 				var $ = require("jquery")(new JSDOM(body).window)
-				var thumb = $($(".header-icon").find(".image-lg")[0]).attr("data-cfsrc") || "https://www.hackthebox.com/images/favicon.png"
+				var thumb = $($(".header-icon").find(".image-lg")[0]).attr("data-cfsrc") || `${HTB_APP_BASE}/images/favicon.png`
 				var rank = $($(".header-title")[0]).find(".c-white").text() || "Noob"
 				var joinDate = parseSingleDate($("div[title^=\"Joined on\"]").attr("title").substring(10)) || 0
 				var countryName = $(".flag")[0].parentNode.attributes["title"].value || "Pangea"

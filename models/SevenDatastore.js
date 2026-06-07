@@ -31,6 +31,9 @@ const { HtbApiConnector: V4 } = require("../modules/htb-api.js")
 const { HtbLegacyConnector: V3 } = require("../modules/htb-legacy-connector")
 const dFlowEnt = require("../helpers/dflow")
 const { Helpers: H } = require("../helpers/helpers.js")
+const { createLogger } = require("../helpers/logger.js")
+
+const log = createLogger("datastore")
 
 class SevenDatastore {
 	constructor() {
@@ -180,7 +183,7 @@ class SevenDatastore {
 	}
 
 	logUpdateProgress(msg) {
-		console.log(msg)
+		log.info(msg)
 		this.informAdminViaDm("[Data Update]", msg)
 	}
 
@@ -199,7 +202,7 @@ class SevenDatastore {
 					console.error(error)
 				}
 				var SESH = this.V3API.SESSION
-				if (Object.keys(SESH).length) console.log("[API CONNECTOR]::: Got a logged in V3 session.")
+				if (Object.keys(SESH).length) log.info("Got a logged in V3 session")
 
 				// var MACHINES_V3 = await this.V3API.getMachines()
 				var machineSubmissions, mSObj
@@ -400,13 +403,15 @@ class SevenDatastore {
 							\  exportData(TEAM_STATS, "team_stats.json")  */
 				this.LAST_UPDATE = new Date()
 				this.UPDATE_LOCK = false
-				console.log("[API CONNECTOR]::: Update lock released.")
+				log.info("Update completed", {
+					machines: Object.keys(this.MACHINES).length,
+					challenges: Object.keys(this.CHALLENGES).length,
+					members: Object.keys(this.TEAM_MEMBERS).length,
+					teamName: this.TEAM_STATS?.name || null,
+				})
 				console.timeEnd("Data update took")
 			} catch (error) {
-				console.error(error, "[API CONNECTOR]::: UPDATE FAILED.")
-				console.error(
-					"\n[API CONNECTOR]::: UPDATE LOCK HAS BEEN RESET AS A PRECAUTION."
-				)
+				log.error("UPDATE FAILED", { message: error.message, stack: error.stack })
 				this.UPDATE_LOCK = false
 				// throw(error)
 			}
@@ -878,8 +883,8 @@ class SevenDatastore {
 	 * @returns {(Fortress|null)}
 	 */
 	getFortressByName(name) {
-		return Object.values(this.MISC.FORTRESSES).find((item) =>
-			[item.name.toLowerCase(), item.company.name.toLowerCase()].includes(
+		return Object.values(this.MISC.FORTRESSES || {}).find((item) =>
+			[item.name.toLowerCase(), item.company?.name?.toLowerCase()].includes(
 				name.toLowerCase()
 			)
 		)
@@ -891,7 +896,7 @@ class SevenDatastore {
 	 * @returns {(Endgame|null)}
 	 */
 	getEndgameByName(name) {
-		return Object.values(this.MISC.ENDGAMES).find(
+		return Object.values(this.MISC.ENDGAMES || {}).find(
 			(item) => item.name.toLowerCase() == name.toLowerCase()
 		)
 	}
@@ -902,7 +907,7 @@ class SevenDatastore {
 	 * @returns {(ProLab|null)}
 	 */
 	getProLabByName(name) {
-		return Object.values(this.MISC.PROLABS).find(
+		return Object.values(this.MISC.PROLABS || {}).find(
 			(item) => item.name.toLowerCase() == name.toLowerCase()
 		)
 	}
