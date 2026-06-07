@@ -38,6 +38,7 @@ class SevenDatastore {
 	constructor() {
 		this.UPDATE_LOCK = false
 		this.LAST_UPDATE = new Date()
+		this.FIRST_RUN = false
 		this.V4API = new V4()
 		this.TEAM_STATS = {}
 		this.TEAM_MEMBERS = {}
@@ -135,6 +136,69 @@ class SevenDatastore {
 		return this.V4API.init({ api_token: process.env.HTB_V4_TOKEN })
 	}
 
+	hasCachedObject(data) {
+		return Boolean(data && typeof data === "object" && Object.keys(data).length > 0)
+	}
+
+	hydrateFromDbBackup() {
+		if (!this.MISC || typeof this.MISC !== "object") {
+			this.MISC = {}
+		}
+
+		if (this.FORTRESSES !== undefined && this.MISC.FORTRESSES === undefined) {
+			this.MISC.FORTRESSES = this.FORTRESSES
+		}
+		if (this.ENDGAMES !== undefined && this.MISC.ENDGAMES === undefined) {
+			this.MISC.ENDGAMES = this.ENDGAMES
+		}
+		if (this.PROLABS !== undefined && this.MISC.PROLABS === undefined) {
+			this.MISC.PROLABS = this.PROLABS
+		}
+
+		if (this.MISC.lastUpdate) {
+			this.LAST_UPDATE = new Date(this.MISC.lastUpdate)
+		}
+	}
+
+	syncDbExportFields() {
+		if (this.hasCachedObject(this.MISC.FORTRESSES)) {
+			this.FORTRESSES = this.MISC.FORTRESSES
+		}
+		if (this.hasCachedObject(this.MISC.ENDGAMES)) {
+			this.ENDGAMES = this.MISC.ENDGAMES
+		}
+		if (this.hasCachedObject(this.MISC.PROLABS)) {
+			this.PROLABS = this.MISC.PROLABS
+		}
+	}
+
+	hasCachedTeamData() {
+		return this.hasCachedObject(this.TEAM_MEMBERS)
+			&& Boolean(this.TEAM_STATS?.name || this.TEAM_STATS?.id)
+	}
+
+	getSectionsNeedingUpdate(force = false) {
+		if (force) {
+			return ["machines", "specials", "tags", "team", "challenges"]
+		}
+
+		const sections = []
+		if (!this.hasCachedObject(this.MACHINES)) sections.push("machines")
+		if (
+			this.MISC.FORTRESSES === undefined
+			|| this.MISC.ENDGAMES === undefined
+			|| this.MISC.PROLABS === undefined
+		) {
+			sections.push("specials")
+		}
+		if (!this.hasCachedObject(this.MISC.MACHINE_TAGS)) sections.push("tags")
+		if ((process.env.HTB_TEAM_ID || process.env.HTB_UNIVERSITY_ID) && !this.hasCachedTeamData()) {
+			sections.push("team")
+		}
+		if (!this.hasCachedObject(this.CHALLENGES)) sections.push("challenges")
+		return sections
+	}
+
 	syncAgent() {
         const IS_DEV_INSTANCE = process.env.IS_DEV_INSTANCE === "true";
 		if (IS_DEV_INSTANCE)
@@ -157,123 +221,170 @@ class SevenDatastore {
 		log.info(`[${phase}] ${message}`, meta)
 	}
 
-	async update() {
+	async update(options = {}) {
+		const force = Boolean(options.force)
+		const sectionsToUpdate = this.getSectionsNeedingUpdate(force)
+
+		if (!sectionsToUpdate.length) {
+			log.info("HTB data update skipped — using cached DB data", {
+				machines: Object.keys(this.MACHINES).length,
+				challenges: Object.keys(this.CHALLENGES).length,
+				members: Object.keys(this.TEAM_MEMBERS).length,
+				lastUpdate: this.LAST_UPDATE,
+			})
+			return false
+		}
+
 		if (!this.UPDATE_LOCK) {
 			this.UPDATE_LOCK = true
 			const updateStarted = Date.now()
-			this.logUpdateProgress("HTB data update started")
+			this.logUpdateProgress(force
+				? "HTB data update started (forced full refresh)"
+				: `HTB data update started (partial: ${sectionsToUpdate.join(", ")})`)
 			try {
-				const machinesStarted = Date.now()
-				this.logUpdatePhase("1/5", "Fetching machines (v5 list + selective v4 profiles)")
-				var MACHINES_V4 = await this.V4API.getAllCompleteMachineProfiles()
-				log.info("Fetching starting point machines")
-				this.MISC.STARTING_POINT_MACHINES = await this.V4API.getAllStartingPointMachines()
+				if (sectionsToUpdate.includes("machines")) {
+					const machinesStarted = Date.now()
+					this.logUpdatePhase("1/5", "Fetching machines (v5 list + selective v4 profiles)")
+					var MACHINES_V4 = await this.V4API.getAllCompleteMachineProfiles()
+					log.info("Fetching starting point machines")
+					this.MISC.STARTING_POINT_MACHINES = await this.V4API.getAllStartingPointMachines()
 
-				this.MACHINES = Object.assign({}, MACHINES_V4, this.MISC.STARTING_POINT_MACHINES)
+					this.MACHINES = Object.assign({}, MACHINES_V4, this.MISC.STARTING_POINT_MACHINES)
 
-				log.info("Machines collected", {
-					total: Object.keys(this.MACHINES).length,
-					v4Profiles: Object.keys(MACHINES_V4).length,
-					startingPoint: Object.keys(this.MISC.STARTING_POINT_MACHINES).length,
-					durationMs: Date.now() - machinesStarted,
-				})
-
-				const specialsStarted = Date.now()
-				this.logUpdatePhase("2/5", "Fetching fortresses, endgames and pro labs")
-				this.MISC.FORTRESSES = await this.V4API.getAllFortresses()
-				this.MISC.ENDGAMES = await this.V4API.getAllEndgames()
-				this.MISC.PROLABS = await this.V4API.getAllProlabs()
-				log.info("Special targets collected", {
-					fortresses: Object.keys(this.MISC.FORTRESSES).length,
-					endgames: Object.keys(this.MISC.ENDGAMES).length,
-					prolabs: Object.keys(this.MISC.PROLABS).length,
-					durationMs: Date.now() - specialsStarted,
-				})
-
-				const tagsStarted = Date.now()
-				this.logUpdatePhase("3/5", "Fetching machine tags")
-				var mt = await this.V4API.getMachineTags()
-				this.MISC.MACHINE_TAGS = mt
-				log.info("Machine tags collected", {
-					categories: Object.keys(this.MISC.MACHINE_TAGS).length,
-					durationMs: Date.now() - tagsStarted,
-				})
-
-				const teamStarted = Date.now()
-				this.logUpdatePhase("4/5", "Fetching team / university data and member profiles")
-				if (process.env.HTB_TEAM_ID) {
-					log.info("Using HTB_TEAM_ID", { teamId: process.env.HTB_TEAM_ID })
-					this.TEAM_STATS = await this.V4API.getCompleteTeamProfile(
-						process.env.HTB_TEAM_ID
-					)
-					delete this.TEAM_STATS.weekly
-					var TEAM_MEMBERS_BASE = await this.V4API.getTeamMembers(
-						process.env.HTB_TEAM_ID,
-						Object.keys(this.TEAM_MEMBERS_IGNORED)
-					)
-					log.info("Team members listed", { count: TEAM_MEMBERS_BASE.length })
-					this.TEAM_MEMBERS =
-						await this.V4API.getCompleteMemberProfilesByMemberPartials(
-							TEAM_MEMBERS_BASE
-						)
-				} else if (process.env.HTB_UNIVERSITY_ID) {
-					log.info("Using HTB_UNIVERSITY_ID", { universityId: process.env.HTB_UNIVERSITY_ID })
-					var UNI_MEMBERS_BASE = await this.V4API.getUniversityMembers(
-						process.env.HTB_UNIVERSITY_ID,
-						Object.keys(this.TEAM_MEMBERS_IGNORED)
-					)
-					this.TEAM_MEMBERS =
-						await this.V4API.getCompleteMemberProfilesByMemberPartials(
-							UNI_MEMBERS_BASE
-						)
-					var uniProfile = await this.V4API.getUniversityProfile(
-						process.env.HTB_UNIVERSITY_ID
-					)
-					var captain = UNI_MEMBERS_BASE.find(member => member.role === "admin") || UNI_MEMBERS_BASE[0]
-					this.TEAM_STATS = Object.assign({}, uniProfile || {}, {
-						avatar_url: `https://www.hackthebox.com/storage/universities/${Number(
-							process.env.HTB_UNIVERSITY_ID
-						)}.png`,
-						type: "university",
-						captain: captain ? { id: captain.id, name: captain.name } : null,
+					log.info("Machines collected", {
+						total: Object.keys(this.MACHINES).length,
+						v4Profiles: Object.keys(MACHINES_V4).length,
+						startingPoint: Object.keys(this.MISC.STARTING_POINT_MACHINES).length,
+						durationMs: Date.now() - machinesStarted,
 					})
 				} else {
-					log.warn("No HTB_TEAM_ID or HTB_UNIVERSITY_ID configured — skipping team data")
+					log.info("Skipping machines fetch — using cached data", {
+						count: Object.keys(this.MACHINES).length,
+					})
 				}
 
-				log.info("Team data collected", {
-					teamName: this.TEAM_STATS?.name || null,
-					members: Object.keys(this.TEAM_MEMBERS).length,
-					durationMs: Date.now() - teamStarted,
-				})
+				if (sectionsToUpdate.includes("specials")) {
+					const specialsStarted = Date.now()
+					this.logUpdatePhase("2/5", "Fetching fortresses, endgames and pro labs")
+					if (force || this.MISC.FORTRESSES === undefined) {
+						this.MISC.FORTRESSES = await this.V4API.getAllFortresses()
+					}
+					if (force || this.MISC.ENDGAMES === undefined) {
+						this.MISC.ENDGAMES = await this.V4API.getAllEndgames()
+					}
+					if (force || this.MISC.PROLABS === undefined) {
+						this.MISC.PROLABS = await this.V4API.getAllProlabs()
+					}
+					log.info("Special targets collected", {
+						fortresses: Object.keys(this.MISC.FORTRESSES || {}).length,
+						endgames: Object.keys(this.MISC.ENDGAMES || {}).length,
+						prolabs: Object.keys(this.MISC.PROLABS || {}).length,
+						durationMs: Date.now() - specialsStarted,
+					})
+				} else {
+					log.info("Skipping specials fetch — using cached data")
+				}
+
+				if (sectionsToUpdate.includes("tags")) {
+					const tagsStarted = Date.now()
+					this.logUpdatePhase("3/5", "Fetching machine tags")
+					var mt = await this.V4API.getMachineTags()
+					this.MISC.MACHINE_TAGS = mt
+					log.info("Machine tags collected", {
+						categories: Object.keys(this.MISC.MACHINE_TAGS).length,
+						durationMs: Date.now() - tagsStarted,
+					})
+				} else {
+					log.info("Skipping machine tags fetch — using cached data")
+				}
+
+				if (sectionsToUpdate.includes("team")) {
+					const teamStarted = Date.now()
+					this.logUpdatePhase("4/5", "Fetching team / university data and member profiles")
+					if (process.env.HTB_TEAM_ID) {
+						log.info("Using HTB_TEAM_ID", { teamId: process.env.HTB_TEAM_ID })
+						this.TEAM_STATS = await this.V4API.getCompleteTeamProfile(
+							process.env.HTB_TEAM_ID
+						)
+						delete this.TEAM_STATS.weekly
+						var TEAM_MEMBERS_BASE = await this.V4API.getTeamMembers(
+							process.env.HTB_TEAM_ID,
+							Object.keys(this.TEAM_MEMBERS_IGNORED)
+						)
+						log.info("Team members listed", { count: TEAM_MEMBERS_BASE.length })
+						this.TEAM_MEMBERS =
+							await this.V4API.getCompleteMemberProfilesByMemberPartials(
+								TEAM_MEMBERS_BASE
+							)
+					} else if (process.env.HTB_UNIVERSITY_ID) {
+						log.info("Using HTB_UNIVERSITY_ID", { universityId: process.env.HTB_UNIVERSITY_ID })
+						var UNI_MEMBERS_BASE = await this.V4API.getUniversityMembers(
+							process.env.HTB_UNIVERSITY_ID,
+							Object.keys(this.TEAM_MEMBERS_IGNORED)
+						)
+						this.TEAM_MEMBERS =
+							await this.V4API.getCompleteMemberProfilesByMemberPartials(
+								UNI_MEMBERS_BASE
+							)
+						var uniProfile = await this.V4API.getUniversityProfile(
+							process.env.HTB_UNIVERSITY_ID
+						)
+						var captain = UNI_MEMBERS_BASE.find(member => member.role === "admin") || UNI_MEMBERS_BASE[0]
+						this.TEAM_STATS = Object.assign({}, uniProfile || {}, {
+							avatar_url: `https://www.hackthebox.com/storage/universities/${Number(
+								process.env.HTB_UNIVERSITY_ID
+							)}.png`,
+							type: "university",
+							captain: captain ? { id: captain.id, name: captain.name } : null,
+						})
+					} else {
+						log.warn("No HTB_TEAM_ID or HTB_UNIVERSITY_ID configured — skipping team data")
+					}
+
+					log.info("Team data collected", {
+						teamName: this.TEAM_STATS?.name || null,
+						members: Object.keys(this.TEAM_MEMBERS).length,
+						durationMs: Date.now() - teamStarted,
+					})
+				} else {
+					log.info("Skipping team fetch — using cached data", {
+						members: Object.keys(this.TEAM_MEMBERS).length,
+					})
+				}
 				var names = this.vTM.map((e) => e.name.toLowerCase())
 
-				const challengesStarted = Date.now()
-				this.logUpdatePhase("5/5", "Fetching challenges and categories")
-				this.CHALLENGES = await this.V4API.getAllCompleteChallengeProfiles()
-				this.MISC.CHALLENGE_CATEGORIES =
-					await this.V4API.getChallengeCategories()
-				log.info("Challenges collected", {
-					challenges: Object.keys(this.CHALLENGES).length,
-					categories: Object.keys(this.MISC.CHALLENGE_CATEGORIES || {}).length,
-					durationMs: Date.now() - challengesStarted,
-				})
+				if (sectionsToUpdate.includes("challenges")) {
+					const challengesStarted = Date.now()
+					this.logUpdatePhase("5/5", "Fetching challenges and categories")
+					this.CHALLENGES = await this.V4API.getAllCompleteChallengeProfiles()
+					this.MISC.CHALLENGE_CATEGORIES =
+						await this.V4API.getChallengeCategories()
+					log.info("Challenges collected", {
+						challenges: Object.keys(this.CHALLENGES).length,
+						categories: Object.keys(this.MISC.CHALLENGE_CATEGORIES || {}).length,
+						durationMs: Date.now() - challengesStarted,
+					})
+				} else {
+					log.info("Skipping challenges fetch — using cached data", {
+						count: Object.keys(this.CHALLENGES).length,
+					})
+				}
 
 				this.logUpdatePhase("sync", "Updating Dialogflow entities")
 				try {
 					dFlowEnt.updateEntity(
-						Object.values(this.MISC.PROLABS)
+						Object.values(this.MISC.PROLABS || {})
 							.flat()
 							.map((e) => Object.values(e.flags))
 							.flat(),
 						"specialTargetFlagName"
 					)
 					dFlowEnt.updateEntity(
-						[...new Set([this.MISC.FORTRESSES, this.MISC.ENDGAMES, this.MISC.PROLABS].map(e => Object.values(e)).flat().map(e => e?.name).filter(Boolean))],
+						[...new Set([this.MISC.FORTRESSES, this.MISC.ENDGAMES, this.MISC.PROLABS].map(e => Object.values(e || {})).flat().map(e => e?.name).filter(Boolean))],
 						"specialTargetName"
 					)
 					dFlowEnt.updateEntity(
-						Object.values(this.MISC.CHALLENGE_CATEGORIES).map(
+						Object.values(this.MISC.CHALLENGE_CATEGORIES || {}).map(
 							(category) => category.name
 						),
 						"challengeCategoryName"
@@ -334,14 +445,19 @@ class SevenDatastore {
 							|  exportData(DISCORD_LINKS, "discord_links.json")
 							\  exportData(TEAM_STATS, "team_stats.json")  */
 				this.LAST_UPDATE = new Date()
+				this.MISC.lastUpdate = this.LAST_UPDATE.toISOString()
+				this.syncDbExportFields()
 				this.UPDATE_LOCK = false
 				this.logUpdateProgress("HTB data update completed", {
 					machines: Object.keys(this.MACHINES).length,
 					challenges: Object.keys(this.CHALLENGES).length,
 					members: Object.keys(this.TEAM_MEMBERS).length,
 					teamName: this.TEAM_STATS?.name || null,
+					sections: sectionsToUpdate,
+					forced: force,
 					durationMs: Date.now() - updateStarted,
 				})
+				return true
 			} catch (error) {
 				log.error("HTB data update failed", {
 					message: error.message,
@@ -349,9 +465,11 @@ class SevenDatastore {
 					durationMs: Date.now() - updateStarted,
 				})
 				this.UPDATE_LOCK = false
+				throw error
 			}
 		} else {
 			log.warn("HTB data update skipped — another update is already in progress")
+			return false
 		}
 	}
 

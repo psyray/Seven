@@ -142,6 +142,7 @@ async function importDbBackup() {
 					DAT.TEAM_STATS = rows[7].json
 					DAT.DISCORD_LINKS = rows[8].json
 					DAT.MISC = rows[9].json
+					DAT.hydrateFromDbBackup()
 					console.log("[DB IMPORT]::: Restored from DB backup.")
 					console.info(`Machines   : ${Object.values(DAT.MACHINES).length}\n` +
 						`Challenges : ${Object.values(DAT.CHALLENGES).length}\n` +
@@ -166,6 +167,7 @@ async function importDbBackup() {
  * @param {string[]} fields - The specific data types / buffers specified for the update operation, e.g. ["MACHINES","TEAM_MEMBERS"]
 */
 async function updateCache(fields = DB_FIELDNAMES_AUTO) {
+	DAT.syncDbExportFields()
 	var fieldData = []
 	for (let i = 0; i < fields.length; i++) {
 		var fieldName = fields[i]
@@ -292,11 +294,12 @@ async function updateDiscordIds(client, guildIdString) {
 	updateCache(["DISCORD_LINKS"])
 }
 
-async function refresh() {
-	await DAT.update()
+async function refresh(options = {}) {
+	const updated = await DAT.update(options)
 	if (HTB_PUSHER_OWNS_SUBSCRIPTION) {
 		HTB_PUSHER_OWNS_SUBSCRIPTION.auth = DAT.V4API.getApiToken()
 	}
+	return updated
 }
 
 async function main() {
@@ -316,11 +319,28 @@ async function main() {
 	if (!DEV_MODE_ON) {
 		await DAT.syncAgent()
 		try {
-			log.info("Starting initial HTB data refresh (first run can take 30-60+ min due to HTB rate limits)")
+			const missingSections = DAT.getSectionsNeedingUpdate(false)
+			if (missingSections.length) {
+				log.info("Starting HTB data refresh on boot", {
+					mode: DAT.FIRST_RUN ? "first-run-full" : "partial",
+					sections: missingSections,
+				})
+			} else {
+				log.info("Skipping HTB API refresh on boot — using cached DB data", {
+					machines: Object.keys(DAT.MACHINES).length,
+					challenges: Object.keys(DAT.CHALLENGES).length,
+					members: Object.keys(DAT.TEAM_MEMBERS).length,
+					lastUpdate: DAT.LAST_UPDATE,
+				})
+			}
 			const refreshStarted = Date.now()
-			await refresh()
-			await updateCache()
+			const updated = await refresh({ force: false })
+			if (updated) {
+				DAT.syncDbExportFields()
+				await updateCache()
+			}
 			log.info("Initial data refresh completed", {
+				updated,
 				machines: Object.keys(DAT.MACHINES).length,
 				challenges: Object.keys(DAT.CHALLENGES).length,
 				members: Object.keys(DAT.TEAM_MEMBERS).length,
@@ -332,10 +352,13 @@ async function main() {
 		}
 		setInterval(async () => {
 			try {
-				await refresh()
-				log.info("Scheduled data refresh completed")
-				var updated = await updateCache()
-				if (updated) { log.info("DB backup updated after scheduled refresh") }
+				const updated = await refresh({ force: true })
+				log.info("Scheduled data refresh completed", { updated })
+				if (updated) {
+					DAT.syncDbExportFields()
+					var cacheUpdated = await updateCache()
+					if (cacheUpdated) { log.info("DB backup updated after scheduled refresh") }
+				}
 			} catch (error) {
 				log.error("Scheduled data refresh failed", { message: error.message })
 			}
@@ -668,8 +691,9 @@ async function forceUpdate(message) {
 			"you got it, boss! 😁",
 			"no prob, i'm on it 🍉",
 			"ok, on it! 🍉"), false)
-		await refresh()
+		await refresh({ force: true })
 		console.log("Data refresh completed!")
+		DAT.syncDbExportFields()
 		await updateCache().then(SEND.human(message, H.any("hey I finished updating the DB! 😊",
 			"Heyo, the DB update is finished!",
 			"The data has been updated!",
@@ -689,8 +713,12 @@ async function admin_clearCached(message) {
 		DAT.TEAM_STATS = {}
 		DAT.MACHINES = {}
 		DAT.CHALLENGES = {}
+		DAT.FORTRESSES = {}
+		DAT.ENDGAMES = {}
+		DAT.PROLABS = {}
 		try {
-			await refresh()
+			await refresh({ force: true })
+			DAT.syncDbExportFields()
 			await updateCache()
 			await SEND.human(message, H.any("Done! Cache cleared and data refreshed from HTB."), false)
 			log.info("Admin cache clear completed with refresh", {
