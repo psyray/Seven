@@ -2,12 +2,14 @@ const request = require("superagent")
 const Throttle = require("superagent-throttle")
 require("superagent-retry-delay")(request)
 const { Helpers: H } = require("../helpers/helpers.js")
-const { HTB_API_BASE } = require("../config/htb.js")
+const { HTB_API_BASE, HTB_API_V5_BASE } = require("../config/htb.js")
 const { createLogger } = require("../helpers/logger.js")
 
 const log = createLogger("htb-api")
 const VERBOSE_API_REQUESTS = process.env.HTB_API_LOG_REQUESTS === "true"
 const PROGRESS_EVERY = Number(process.env.HTB_LOG_PROGRESS_EVERY) || 25
+const MACHINE_PROFILE_CONCURRENCY = Math.max(1, Number(process.env.HTB_MACHINE_PROFILE_CONCURRENCY) || 3)
+const MACHINE_LIST_PAGE_SIZE = 100
 
 function logBatchProgress(label, current, total) {
 	if (current === 1 || current === total || current % PROGRESS_EVERY === 0) {
@@ -21,8 +23,109 @@ const setTypeForValues = (type, objectMap) => {
 	return objectMap
 }
 
+function getThrottleEndpointKey(endpointPath) {
+	if (/^machine\/profile\/[^/]+$/.test(endpointPath)) {
+		return "machine/profile/"
+	}
+	return endpointPath.replace(/\d[^$]*/gm, "").replace(/\/$/, "")
+}
+
 function extractPaginatedItems(response) {
 	return response?.data ?? response?.message ?? response?.info ?? []
+}
+
+function normalizeAvatarPath(avatar) {
+	if (!avatar || typeof avatar !== "string") return avatar
+	if (avatar.startsWith("http")) {
+		const match = avatar.match(/\/avatars\/[^/?#]+/)
+		return match ? match[0] : avatar
+	}
+	return avatar
+}
+
+function normalizeV5Creator(creator) {
+	if (!creator) return null
+	return {
+		id: creator.id,
+		name: creator.name,
+		avatar: creator.avatar,
+		isRespected: creator.isRespected,
+	}
+}
+
+function normalizeV5Machine(raw) {
+	const cocreator = raw.cocreators?.[0] || null
+	const retired = Boolean(raw.retiredDate) || (typeof raw.state === "string" && raw.state.startsWith("retired"))
+	return {
+		id: raw.id,
+		name: raw.name,
+		os: raw.os,
+		active: raw.active,
+		retired,
+		retiredate: raw.retiredDate || null,
+		release: raw.releaseDate,
+		points: raw.points,
+		static_points: retired ? raw.points : (raw.staticPoints ?? raw.points),
+		user_owns_count: raw.userOwnsCount,
+		root_owns_count: raw.rootOwnsCount,
+		free: raw.free,
+		authUserInUserOwns: raw.authUserInUserOwns,
+		authUserInRootOwns: raw.authUserInRootOwns,
+		authUserHasReviewed: raw.authUserHasReviewed,
+		stars: raw.rating,
+		star: raw.rating,
+		difficulty: raw.difficulty,
+		difficultyText: raw.difficultyText,
+		avatar: normalizeAvatarPath(raw.avatar),
+		feedbackForChart: raw.feedbackForChart,
+		playInfo: raw.playInfo,
+		maker: normalizeV5Creator(raw.firstCreator),
+		maker2: normalizeV5Creator(cocreator),
+		recommended: raw.recommended,
+		sp_flag: raw.spFlag,
+		isTodo: raw.todo,
+		is_competitive: raw.competitive,
+		labels: raw.labels,
+		ip: raw.ip,
+		state: raw.state,
+	}
+}
+
+function machineNeedsProfileEnrichment(machine) {
+	return Boolean(
+		machine.retired
+		|| machine.user_owns_count > 0
+		|| machine.root_owns_count > 0
+	)
+}
+
+function extractMachineProfileEnrichment(profile) {
+	const info = profile?.info || {}
+	return {
+		static_points: info.static_points,
+		userBlood: info.userBlood,
+		rootBlood: info.rootBlood,
+		firstUserBloodTime: info.firstUserBloodTime,
+		firstRootBloodTime: info.firstRootBloodTime,
+		maker: info.maker,
+		maker2: info.maker2,
+		tester: info.tester,
+	}
+}
+
+async function mapWithConcurrency(items, mapper, concurrency) {
+	const results = new Array(items.length)
+	let nextIndex = 0
+
+	async function worker() {
+		while (nextIndex < items.length) {
+			const current = nextIndex++
+			results[current] = await mapper(items[current], current)
+		}
+	}
+
+	await Promise.all(Array.from({ length: concurrency }, worker))
+	return results
 }
 
 function isHtmlResponse(text) {
@@ -91,7 +194,11 @@ class HtbApiConnector {
 	}
 
 	updateThrottle(endpoint, rLimit, rLeft) {
-		this.getThrottle(endpoint).rate = Math.floor((Number(rLimit) || 15) * 0.90)
+		const throttle = this.getThrottle(endpoint)
+		throttle.rate = Math.floor((Number(rLimit) || 15) * 0.90)
+		if (endpoint === "machine/profile/") {
+			throttle.concurrent = MACHINE_PROFILE_CONCURRENCY
+		}
 	}
 
 	async refreshTokenIfNeeded() {
@@ -105,11 +212,12 @@ class HtbApiConnector {
 		throw new Error("HTB_V4_TOKEN expired. Regenerate it on app.hackthebox.com and restart the bot.")
 	}
 
-	async htbApiGet(endpointPath, parseText = false) {
-		const endpoint = endpointPath.replace(/\d[^$]*/gm, "").replace(/\/$/, "")
+	async htbApiGet(endpointPath, parseText = false, options = {}) {
+		const base = options.base || HTB_API_BASE
+		const endpoint = getThrottleEndpointKey(endpointPath)
 		await this.refreshTokenIfNeeded()
 
-		const url = `${HTB_API_BASE}/${endpointPath}`
+		const url = `${base}/${endpointPath}`
 		const started = Date.now()
 
 		return new Promise((resolve, reject) => {
@@ -182,20 +290,61 @@ class HtbApiConnector {
 	}
 
 	async getMachineTags() {
-		var tagsArray = (await this.htbApiGet("machine/tags/list")).info
+		var tagsArray = (await this.htbApiGet("tags/list")).info
 		return (H.arrToObj(tagsArray, "id"))
 	}
 
+	getMachineProfile(identifier) {
+		return this.htbApiGet(`machine/profile/${encodeURIComponent(identifier)}`)
+	}
+
 	async getCompleteMachineProfileById(id) {
-		return this.htbApiGet(`machine/profile/${id}`)
+		return this.getMachineProfile(id)
+	}
+
+	async getMachinesV5(states = ["active", "retired", "unreleased"]) {
+		let allMachines = []
+
+		for (const state of states) {
+			let currentPage = 1
+			let lastPage = 1
+
+			log.info(`Fetching machine pages from v5 /machines`, { state })
+			do {
+				const query = new URLSearchParams({
+					per_page: String(MACHINE_LIST_PAGE_SIZE),
+					page: String(currentPage),
+					state,
+				})
+				const response = await this.htbApiGet(`machines?${query}`, false, { base: HTB_API_V5_BASE })
+				const pageItems = extractPaginatedItems(response)
+				allMachines = allMachines.concat(pageItems)
+				lastPage = response?.meta?.last_page ?? 1
+				log.info(`Machine page ${currentPage}/${lastPage}`, {
+					state,
+					pageCount: pageItems.length,
+					totalSoFar: allMachines.length,
+				})
+				currentPage++
+			} while (currentPage <= lastPage)
+		}
+
+		log.info("Machine list complete", { endpoint: "v5/machines", total: allMachines.length })
+		return allMachines.map(normalizeV5Machine)
 	}
 
 	async getCurrentMachines() {
-		return setTypeForValues("machine", H.arrToObj(await this.getMachines("machine/paginated"), "id"))
+		return setTypeForValues("machine", H.arrToObj(
+			(await this.getMachinesV5(["active"])),
+			"id"
+		))
 	}
 
 	async getRetiredMachines() {
-		return setTypeForValues("machine", H.arrToObj(await this.getMachines("machine/list/retired/paginated"), "id"))
+		return setTypeForValues("machine", H.arrToObj(
+			(await this.getMachinesV5(["retired"])),
+			"id"
+		))
 	}
 
 	async getMachines(endpoint) {
@@ -259,39 +408,83 @@ class HtbApiConnector {
 	}
 
 	getUnreleasedMachines() {
-		return this.htbApiGet(`machine/unreleased/`).then(e => H.arrToObj(e?.data || [], "id"))
+		return this.getMachinesV5(["unreleased"]).then(machines => H.arrToObj(machines, "id"))
 	}
 
 	async getAllMachinesFast() {
-		var retired = await this.getRetiredMachines()
-		var current = await this.getCurrentMachines()
-		var coming = await this.getUnreleasedMachines()
-		return { ...retired, ...current, ...coming }
+		const machines = await this.getMachinesV5()
+		return setTypeForValues("machine", H.arrToObj(machines, "id"))
+	}
+
+	async enrichMachineProfile(machine) {
+		if (!machineNeedsProfileEnrichment(machine)) {
+			return {}
+		}
+
+		const profile = await this.getMachineProfile(machine.name || machine.id)
+		return extractMachineProfileEnrichment(profile)
 	}
 
 	async getAllCompleteMachineProfiles() {
-		log.info("Building complete machine profiles (list + per-machine detail)")
-		var machines = await this.getAllMachinesFast()
-		const ids = Object.values(machines).map(machine => machine.id)
-		log.info("Machine IDs collected", { count: ids.length })
-		return this.getCompleteMachineProfilesByIds(ids).then(profiles => {
-			Object.keys(profiles).map(mId => profiles[mId] = H.combine([machines[mId], profiles[mId]]))
-			log.info("Complete machine profiles ready", { count: Object.keys(profiles).length })
-			return profiles
+		log.info("Building complete machine profiles (v5 list + targeted v4 profile enrichment)")
+		const machines = await this.getAllMachinesFast()
+		const entries = Object.values(machines)
+		const enrichable = entries.filter(machineNeedsProfileEnrichment)
+		log.info("Machine IDs collected", {
+			total: entries.length,
+			profileFetches: enrichable.length,
+			skipped: entries.length - enrichable.length,
 		})
+
+		const profileEndpoint = "machine/profile/"
+		const profileThrottle = this.getThrottle(profileEndpoint)
+		profileThrottle.concurrent = MACHINE_PROFILE_CONCURRENCY
+		profileThrottle.rate = Math.max(profileThrottle.rate, 45)
+
+		let done = 0
+		const enrichmentsById = {}
+		await mapWithConcurrency(enrichable, async (machine) => {
+			enrichmentsById[machine.id] = await this.enrichMachineProfile(machine)
+			done++
+			logBatchProgress("Machine profiles", done, enrichable.length)
+		}, MACHINE_PROFILE_CONCURRENCY)
+
+		const profiles = {}
+		for (const machine of entries) {
+			profiles[machine.id] = H.combine([machine, enrichmentsById[machine.id] || {}])
+		}
+
+		log.info("Complete machine profiles ready", {
+			count: Object.keys(profiles).length,
+			profileFetches: enrichable.length,
+		})
+		return profiles
 	}
 
 	async getCompleteMachineProfilesByIds(machineIds) {
-		const total = machineIds.length
+		const ids = machineIds.map(entry => (typeof entry === "object" ? entry.id : entry))
+		const machines = await this.getAllMachinesFast()
+		const entries = ids.map(id => machines[id]).filter(Boolean)
+		const enrichable = entries.filter(machineNeedsProfileEnrichment)
+
+		const profileEndpoint = "machine/profile/"
+		const profileThrottle = this.getThrottle(profileEndpoint)
+		profileThrottle.concurrent = MACHINE_PROFILE_CONCURRENCY
+		profileThrottle.rate = Math.max(profileThrottle.rate, 45)
+
 		let done = 0
-		log.info(`Fetching machine profiles`, { total })
-		const machines = await Promise.all(machineIds.map(async (id) => {
-			const profile = await this.getCompleteMachineProfileById(id)
+		const enrichmentsById = {}
+		await mapWithConcurrency(enrichable, async (machine) => {
+			enrichmentsById[machine.id] = await this.enrichMachineProfile(machine)
 			done++
-			logBatchProgress("Machine profiles", done, total)
-			return profile
-		}))
-		return setTypeForValues("machine", H.arrToObj(machines.map(e => e.info), "id"))
+			logBatchProgress("Machine profiles", done, enrichable.length)
+		}, MACHINE_PROFILE_CONCURRENCY)
+
+		const profiles = {}
+		for (const machine of entries) {
+			profiles[machine.id] = H.combine([machine, enrichmentsById[machine.id] || {}])
+		}
+		return profiles
 	}
 
 	searchChallengeByExactName(name) {

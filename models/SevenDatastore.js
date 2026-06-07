@@ -164,7 +164,7 @@ class SevenDatastore {
 			this.logUpdateProgress("HTB data update started")
 			try {
 				const machinesStarted = Date.now()
-				this.logUpdatePhase("1/5", "Fetching machines (V4 API — slow step, rate-limited by HTB)")
+				this.logUpdatePhase("1/5", "Fetching machines (v5 list + selective v4 profiles)")
 				var MACHINES_V4 = await this.V4API.getAllCompleteMachineProfiles()
 				log.info("Fetching starting point machines")
 				this.MISC.STARTING_POINT_MACHINES = await this.V4API.getAllStartingPointMachines()
