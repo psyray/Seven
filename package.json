@@ -10,7 +10,10 @@
 		"docker:down": "docker compose down",
 		"docker:reset-db": "docker compose down -v",
 		"docker:logs": "docker compose logs -f seven",
-		"docker:restart": "docker compose restart seven"
+		"docker:restart": "docker compose restart seven",
+		"test:intents": "node scripts/intent-smoke.js",
+		"test:e2e": "node scripts/e2e-help-audit.js",
+		"test:logs": "node scripts/analyze-seven-logs.js"
 	},
 	"engines": {
 		"node": ">=16.x"

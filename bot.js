@@ -36,6 +36,7 @@ const { Send } = require("./modules/send.js")
 const { HTBEmoji } = require("./helpers/emoji.js")
 const { generateBinaryClockImage } = require("./helpers/binclock")
 const { createLogger } = require("./helpers/logger.js")
+const { extractTargetNameFromMessage, resolveLocalIntent } = require("./helpers/nlp.js")
 
 const log = createLogger("bot")
 
@@ -756,7 +757,21 @@ async function admin_clearCached(message) {
 
 const checkIsSevenMsg = /[\t ]?seven\W?/g
 
+function logSmokeResult(smokeId, meta) {
+	if (!smokeId || process.env.SMOKE_TRACE !== "1") return
+	console.log(`[SMOKE] result ${JSON.stringify({ smokeId, ...meta })}`)
+}
+
 async function handleMessage(message) {
+	let smokeId = null
+	const smokePrefix = message.content.match(/^\[SMOKE:([^\]]+)\]\s*/)
+	if (smokePrefix) {
+		smokeId = smokePrefix[1]
+		message.content = message.content.replace(/^\[SMOKE:[^\]]+\]\s*/, "")
+		if (process.env.SMOKE_TRACE === "1") {
+			console.log(`[SMOKE:${smokeId}] start prompt="${message.content}"`)
+		}
+	}
 	message.content = message.content.split("\n").filter(e => !e.startsWith("> ")).join("\n")
 	if (message.content.toLowerCase() != "seven" && (message.channel.type == "dm" || message.content.toLowerCase().includes("seven"))) {
 		if (!message.author.bot) {
@@ -765,21 +780,25 @@ async function handleMessage(message) {
 			}
 			var htbItem = DAT.resolveEnt(message.content, null, null, message, false)
 			if (message.content.toLowerCase().trim() == "help") {
-				try { sendHelpMsg(message) } catch (e) { console.log(e) }
+				try { sendHelpMsg(message); logSmokeResult(smokeId, { intent: "help", ok: true }) } catch (e) { console.log(e); logSmokeResult(smokeId, { intent: "help", ok: false, error: String(e) }) }
 			} else if (htbItem) {
 				console.log("[SEVEN]::: HTB Entity was resolved.")
-				try { SEND.embed(message, await EGI.infoFor(htbItem.type, htbItem.name, null, message, htbItem)) } catch (e) { console.error(e) }
+				try { SEND.embed(message, await EGI.infoFor(htbItem.type, htbItem.name, null, message, htbItem)); logSmokeResult(smokeId, { intent: "resolveEnt", ok: true, type: htbItem.type }) } catch (e) { console.error(e); logSmokeResult(smokeId, { intent: "resolveEnt", ok: false, error: String(e) }) }
 			} else {
 				var result = await understand(message)
-				var isRipe = result.allRequiredParamsPresent
+				var dfParams = struct.decode(result.parameters)
+				var localIntent = resolveLocalIntent(message.content, result, dfParams)
+				var isRipe = localIntent?.allRequiredParamsPresent ?? result.allRequiredParamsPresent
+				var job = localIntent?.intent ?? result.intent.displayName
 				console.log("[DF]::: Detected intent: " + result.intent.displayName + " | " + (isRipe ? (result.parameters.length ? "All required params present." : "No required parameters") : "Required parameters missing."))
+				if (localIntent) console.log("[NLP]::: Local intent override:", job, localIntent.parameters)
 				// console.dir(result)
 				if (result.intent && isRipe) {
-					var job = result.intent.displayName
 					var inf = result.parameters.fields
 					/** (Dialogflow) The returned entity parameters, parsed from user query. */
-					var P = struct.decode(result.parameters)
+					var P = localIntent?.parameters ?? dfParams
 					if (Object.keys(P).length) console.log("Extracted:", P)
+					var smokeOk = true
 					try {
 						switch (job) {
 						case "help": sendHelpMsg(message); break
@@ -804,13 +823,25 @@ async function handleMessage(message) {
 						case "getTeamLeader": sendTeamLeaderMsg(message, result.fulfillmentText); break
 						case "getTeamRanking": SEND.embed(message, EGI.teamRank()); break
 						case "getFlagboard": sendFlagboardMsg(message); break
-						case "getTargetInfo": SEND.embed(message, await EGI.infoFor(P.targetType, P.targetName)); break
+						case "getTargetInfo": {
+							const targetName = P.targetName || extractTargetNameFromMessage(message.content, P.targetType)
+							SEND.embed(message, await EGI.infoFor(P.targetType, targetName))
+							break
+						}
 						case "getTargetOwners": SEND.embed(message, EGI.teamOwnsForTarget(DAT.resolveEnt(P.target, P.htbTargetType), undefined, P.ownType, P.ownFilter)); break
 						case "checkMemberOwnedTarget": SEND.embed(message, EGI.checkMemberOwnedTarget(DAT.resolveEnt(P.username, "member", false, message), DAT.resolveEnt(P.targetname, P.targettype), P.flagNames)); break
 						case "getFirstBox": SEND.embed(message, await EGI.infoFor("machine", "Lame")); await SEND.human(message, result.fulfillmentText); break
 						case "agent.doReboot": doFakeReboot(message, result.fulfillmentText); break
 						case "getNewBox": SEND.embed(message, await EGI.infoFor("machine", DAT.getNewBoxId(), true)); break
-						case "getMemberInfo": SEND.embed(message, await EGI.infoFor("member", P.username, false, message, DAT.resolveEnt(P.username, "member", false, message) || { type: null })); break
+						case "getMemberInfo": {
+							let member = DAT.resolveEnt(P.username, "member", false, message)
+							if (member?.id && !Array.isArray(member.endgames)) {
+								member = await DAT.V4API.getCompleteMemberProfileByMemberPartial(member)
+								if (member) member = Object.assign({ type: "member" }, member)
+							}
+							SEND.embed(message, await EGI.infoFor("member", P.username, false, message, member || { type: null }))
+							break
+						}
 						case "getMemberRank": SEND.embed(message, EGI.memberRank(DAT.resolveEnt(P.username, "member", false, message))); break
 						case "getMemberChart": sendMemberChartMsg(message, H.sAcc(DAT.resolveEnt(P.username, "member", false, message), "name"), (P.interval ? P.interval : "1Y")); break
 						case "filterMemberOwns": sendActivityMsg(message, DAT.resolveEnt(P.username, "member", false, message),
@@ -840,13 +871,57 @@ async function handleMessage(message) {
 						}
 					} catch (error) {
 						console.error(error)
+						smokeOk = false
+						logSmokeResult(smokeId, { intent: job, ok: false, error: String(error) })
 					}
+					if (smokeOk) logSmokeResult(smokeId, { intent: job, ok: true, dfIntent: result.intent.displayName, local: Boolean(localIntent) })
+					message.channel.stopTyping(true)
+				} else if (localIntent) {
+					var P = localIntent.parameters
+					smokeOk = true
+					try {
+						switch (localIntent.intent) {
+						case "filterTargets":
+							SEND.embed(message, EGI.filteredTargets(DAT.filterEnt(message,
+								P.targettype, P.sortby, P.sortorder, P.limit || 15, null, null, P.memberName, P.targetFilterBasis),
+							P.sortby, P, message), true)
+							break
+						case "getMemberInfo": {
+							let member = DAT.resolveEnt(P.username, "member", false, message)
+							if (member?.id && !Array.isArray(member.endgames)) {
+								member = await DAT.V4API.getCompleteMemberProfileByMemberPartial(member)
+								if (member) member = Object.assign({ type: "member" }, member)
+							}
+							SEND.embed(message, await EGI.infoFor("member", P.username, false, message, member || { type: null }))
+							break
+						}
+						case "getTargetInfo": {
+							const targetName = P.targetName || extractTargetNameFromMessage(message.content, P.targetType)
+							SEND.embed(message, await EGI.infoFor(P.targetType, targetName))
+							break
+						}
+						case "getNewBox":
+							SEND.embed(message, await EGI.infoFor("machine", DAT.getNewBoxId(), true))
+							break
+						default:
+							await SEND.human(message, result.fulfillmentText)
+						}
+					} catch (error) {
+						console.error(error)
+						smokeOk = false
+						logSmokeResult(smokeId, { intent: localIntent.intent, ok: false, error: String(error) })
+					}
+					if (smokeOk) logSmokeResult(smokeId, { intent: localIntent.intent, ok: true, local: true })
 					message.channel.stopTyping(true)
 				} else {
 					htbItem = await DAT.resolveEnt(message.content.replace(/\s/g, ""), null, null, message, true)
 					if (htbItem) {
 						SEND.embed(message, await EGI.infoFor(null, null, null, message, htbItem))
-					} else { await SEND.human(message, result.fulfillmentText) }
+						logSmokeResult(smokeId, { intent: "resolveEnt", ok: true, type: htbItem.type })
+					} else {
+						await SEND.human(message, result.fulfillmentText)
+						logSmokeResult(smokeId, { intent: result.intent.displayName, ok: false, fallback: true })
+					}
 				}
 			}
 		}

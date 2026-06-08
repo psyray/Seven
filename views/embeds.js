@@ -139,7 +139,7 @@ class HtbEmbeds {
 				endgames, fortresses, prolabs, bloods, user_owns: users, system_owns: roots, challenge_owns, current_rank_progress: rankProgress,
 				user_bloods, system_bloods, description, university_name: uni, website, github, linkedin, twitter } = target
 
-			const challs = challenge_owns.solved
+			const challs = H.sAcc(challenge_owns, "solved", null) || 0
 			const challenge_bloods = H.sAcc(bloods, "challenges", "length")
 			const machine_bloods = H.sAcc(bloods, "machines", "length")
 			const hasOwns = (roots + users + challs > 0)
@@ -168,7 +168,9 @@ class HtbEmbeds {
 						+ "```",
 				false)
 				.setFooter(`ℹ️  Members last updated ${F.timeSince(this.ds.LAST_UPDATE)}`)
-			const checkProgress = (progressArray) => progressArray.map(e => e.completion_percentage).reduce((prev, next) => prev + next)
+			const checkProgress = (progressArray) => Array.isArray(progressArray) && progressArray.length
+				? progressArray.map(e => e.completion_percentage).reduce((prev, next) => prev + next)
+				: 0
 			if (this.socialString(github, linkedin, twitter, website)) {
 				embed.addField("Social", this.socialString(github, linkedin, twitter, website), false)
 			}
