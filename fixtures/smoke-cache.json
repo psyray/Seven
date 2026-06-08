@@ -1,0 +1,161 @@
+{
+  "MACHINES": {
+    "1": {
+      "id": 1,
+      "name": "Lame",
+      "type": "machine",
+      "os": "Linux",
+      "active": 0,
+      "retired": 1,
+      "points": 20,
+      "release": "2017-03-17T17:00:00.000000Z",
+      "retiredate": "2018-01-01T17:00:00.000000Z",
+      "user_owns_count": 100,
+      "root_owns_count": 90,
+      "stars": 4.2,
+      "difficulty": 20,
+      "difficultyText": "Easy",
+      "avatar": "/storage/avatars/lame.png",
+      "maker": { "id": 1, "name": "ch4p" },
+      "userBlood": { "user": { "name": "testuser" } },
+      "rootBlood": { "user": { "name": "psyray" } }
+    },
+    "2": {
+      "id": 2,
+      "name": "Cap",
+      "type": "machine",
+      "os": "Linux",
+      "active": 1,
+      "retired": 0,
+      "points": 30,
+      "release": "2024-06-01T17:00:00.000000Z",
+      "user_owns_count": 50,
+      "root_owns_count": 40,
+      "stars": 4.5,
+      "difficulty": 45,
+      "difficultyText": "Medium",
+      "avatar": "/storage/avatars/cap.png",
+      "maker": { "id": 2, "name": "maker" }
+    },
+    "3": {
+      "id": 3,
+      "name": "FreshBox",
+      "type": "machine",
+      "os": "Windows",
+      "active": 1,
+      "retired": 0,
+      "points": 40,
+      "release": "2025-01-15T17:00:00.000000Z",
+      "user_owns_count": 10,
+      "root_owns_count": 5,
+      "stars": 4.8,
+      "difficulty": 60,
+      "difficultyText": "Medium",
+      "avatar": "/storage/avatars/fresh.png"
+    }
+  },
+  "CHALLENGES": {
+    "10": {
+      "id": 10,
+      "name": "Baby",
+      "type": "challenge",
+      "category_name": "Web",
+      "difficulty": "Easy",
+      "avg_difficulty": 10,
+      "points": 10,
+      "retired": 0,
+      "release_date": "2020-01-01T17:00:00.000000Z",
+      "likes": 80,
+      "dislikes": 5,
+      "solves": 500,
+      "description": "A baby web challenge.",
+      "creator_id": 1,
+      "creator_name": "ch4p",
+      "creator_avatar": "/avatar.png"
+    }
+  },
+  "TEAM_MEMBERS": {
+    "100": {
+      "id": 100,
+      "type": "member",
+      "name": "testuser",
+      "rank": "Hacker",
+      "rank_text": "Hacker",
+      "rank_id": 3,
+      "next_rank": "Pro Hacker",
+      "points": 500,
+      "ranking": 12000,
+      "respects": 25,
+      "avatar": "/avatar-test.png",
+      "country_code": "FR",
+      "country_name": "France",
+      "user_owns": 10,
+      "system_owns": 8,
+      "team": { "id": 999, "name": "SmokeTeam", "avatar": "/team.png" },
+      "role": "member",
+      "joinDate": 1489000000,
+      "activity": [
+        { "object_type": "machine", "name": "Lame", "type": "user", "date": "2024-01-10T12:00:00.000000Z" },
+        { "object_type": "machine", "name": "Lame", "type": "root", "date": "2024-01-11T12:00:00.000000Z" },
+        { "object_type": "challenge", "name": "Baby", "type": "challenge", "date": "2024-02-01T12:00:00.000000Z" }
+      ],
+      "bloods": { "machines": [], "challenges": [] }
+    },
+    "101": {
+      "id": 101,
+      "type": "member",
+      "name": "psyray",
+      "rank": "Pro Hacker",
+      "rank_text": "Pro Hacker",
+      "rank_id": 4,
+      "next_rank": "Elite Hacker",
+      "points": 1200,
+      "ranking": 3000,
+      "respects": 50,
+      "avatar": "/avatar-psy.png",
+      "country_code": "DE",
+      "country_name": "Germany",
+      "user_owns": 20,
+      "system_owns": 18,
+      "team": { "id": 999, "name": "SmokeTeam", "avatar": "/team.png" },
+      "role": "member",
+      "activity": [
+        { "object_type": "machine", "name": "Cap", "type": "root", "date": "2024-05-01T12:00:00.000000Z" }
+      ],
+      "endgames": [],
+      "fortresses": [],
+      "prolabs": [],
+      "challenge_owns": { "solved": 5 },
+      "bloods": { "machines": [{ "name": "Lame" }], "challenges": [] }
+    }
+  },
+  "TEAM_STATS": {
+    "id": 999,
+    "type": "team",
+    "name": "SmokeTeam",
+    "rank": 42,
+    "points": 50000,
+    "respects": 200,
+    "country_code": "FR",
+    "country_name": "France",
+    "motto": "Smoke tests only.",
+    "description": "Fixture team",
+    "avatar_url": "/team-avatar.png",
+    "captain": { "id": 100 },
+    "user_owns": 100,
+    "system_owns": 80,
+    "first_bloods": 5,
+    "topMembers": [100, 101]
+  },
+  "MISC": {
+    "lastUpdate": "2025-06-01T12:00:00.000000Z",
+    "MACHINE_TAGS": {},
+    "SPECIALS": {
+      "Endgame": [],
+      "Fortress": [],
+      "Pro Labs": []
+    }
+  },
+  "DISCORD_LINKS": {},
+  "TEAM_MEMBERS_IGNORED": {}
+}

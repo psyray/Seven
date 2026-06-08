@@ -28,6 +28,9 @@ services:
       - .env
     environment:
       NODE_ENV: production
+      HOME: /tmp
+      PUPPETEER_EXECUTABLE_PATH: /usr/lib/chromium/chromium
+      CHROME_USER_DATA_DIR: /tmp/chrome-user-data
       PGHOST: postgres
       PGPORT: "5432"
       PGUSER: ${POSTGRES_USER:-seven}

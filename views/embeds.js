@@ -737,12 +737,15 @@ class HtbEmbeds {
 	memberActivity(member=null, limit=500, typeFilter=null, sortOrder, sortBy=null, imageData=null){
 		if (member) {
 			var embeds = []
-			embeds.push(this.MEMBER_INFO_BASE.attachFiles(new Attachment(`./static/img/${F.challengeCategoryNameToIconFile("OSINT")}`, "icon.png"))
+			var activityEmbed = this.MEMBER_INFO_BASE.attachFiles(new Attachment(`./static/img/${F.challengeCategoryNameToIconFile("OSINT")}`, "icon.png"))
 				.setTitle(this.ds.tryDiscordifyUid(member.id, member.self))
 				.setDescription("*Filtered activity stream + graph for user " + F.memberToMdLink(member, true)+ "*.")
 				.setAuthor("Member activity stream", "attachment://icon.png", F.teamProfileUrl(this.ds.TEAM_STATS))
 				.setThumbnail(F.avatar2Url(member.avatar))
-				.attachFiles([{ name: "chart.png", attachment: imageData }]).setImage("attachment://chart.png"))
+			if (imageData) {
+				activityEmbed.attachFiles([{ name: "chart.png", attachment: imageData }]).setImage("attachment://chart.png")
+			}
+			embeds.push(activityEmbed)
 			var filteredOwns = this.ds.filterMemberOwns(member.id, typeFilter, sortBy, sortOrder, limit)
 			if (filteredOwns.length){
 				var chunkedOwns = this.embedSubdivide(filteredOwns, this.achievementString, 800, 5500, 15)
@@ -750,6 +753,7 @@ class HtbEmbeds {
 				chunkedOwns.forEach(embeddableGroup => {
 					if (embeddableGroup.length > 0) {
 						embeds.push(this.MEMBER_INFO_BASE
+							.setDescription("Recent owns for this member.")
 							.addFields(embeddableGroup.map((e,idx) => ({name:(idx == 0 ? "`[...List Data...]`":"`━━━━━━━━ ◦ ❖ ◦ ━━━━━━━━`"),value:`\`\`\`css\n${e.map(x => x.str).join("\n")}\n\`\`\``}))))
 					}
 				})
@@ -906,9 +910,12 @@ class HtbEmbeds {
 
 	memberAchievementTimelineChart(member, term, chartImageBuffer) {
 		var embed = this.CHART_BASE
-			.attachFiles([{ name: `chart-${member.id}-${term}.png`, attachment: chartImageBuffer }])
+			.setDescription(`Achievement progress chart for **${member.name}** over **${term}**.`)
 			.setTitle(`User Achievement Timeline for ${member.name} [${term}]`)
-			.setImage(`attachment://chart-${member.id}-${term}.png`)
+		if (chartImageBuffer) {
+			embed.attachFiles([{ name: `chart-${member.id}-${term}.png`, attachment: chartImageBuffer }])
+				.setImage(`attachment://chart-${member.id}-${term}.png`)
+		}
 		return embed
 	}
 

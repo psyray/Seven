@@ -11,6 +11,7 @@ function _interopDefault(ex) {
 var puppeteer = require("puppeteer")
 var path = _interopDefault(require("path"))
 var serialize = _interopDefault(require("serialize-javascript"))
+var getPuppeteerLaunchOptions = require("../../../../helpers/puppeteer-launch.js").getPuppeteerLaunchOptions
 
 // TODO: remove render function?
 async function render(exporter, options) {
@@ -21,18 +22,13 @@ async function render(exporter, options) {
 	return res
 }
 async function* iterableRender(exporter, options) {
-	const browser = await puppeteer.launch({
-		headless: process.env.NODE_ENV === "chartdev" ? false : true,
-		devtools: process.env.NODE_ENV === "chartdev" ? true : false,
-		args: [
-			// Required for Docker version of Puppeteer
-			"--no-sandbox",
-			"--disable-setuid-sandbox",
-			// This will write shared memory files into /tmp instead of /dev/shm,
-			// because Docker’s default for /dev/shm is 64MB
-			"--disable-dev-shm-usage"
-		],
-	})
+	let browser
+	try {
+		browser = await puppeteer.launch(getPuppeteerLaunchOptions())
+	} catch (err) {
+		console.error("Puppeteer launch failed", err)
+		throw err
+	}
 	const page = await browser.newPage()
 	// globally init page
 	await page.setViewport({
@@ -66,8 +62,8 @@ async function* iterableRender(exporter, options) {
 	} else {
 		yield renderIteration(options.charts)
 	}
-	if (process.env.NODE_ENV !== "chartdev") {
-		await browser.close()
+	if (process.env.NODE_ENV !== "chartdev" && browser) {
+		await browser.close().catch(() => {})
 	}
 	return true
 }

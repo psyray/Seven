@@ -35,6 +35,8 @@ const { SevenDatastore } = require("./models/SevenDatastore.js")
 const { Send } = require("./modules/send.js")
 const { HTBEmoji } = require("./helpers/emoji.js")
 const { generateBinaryClockImage } = require("./helpers/binclock")
+const { normalizeChartTerm } = require("./helpers/chart-term.js")
+const { buildMemberProgressChart, buildMemberActivityChart } = require("./helpers/chart-messages.js")
 const { createLogger } = require("./helpers/logger.js")
 const { extractTargetNameFromMessage, resolveLocalIntent } = require("./helpers/nlp.js")
 
@@ -514,11 +516,17 @@ async function sendTeamLeaderMsg(message) {
 async function sendMemberChartMsg(message, username, term) {
 	message.channel.startTyping()
 	var member = DAT.resolveEnt(username, "member", false, message)
-	var chartData = await DAT.V4API.getMemberAchievementChart(member.id, term)
-	var chartImageB64 = await CHART_RENDERER.renderChart(member, chartData, term, "userProgress")
-	var chartImage = chartImageB64 ? new Buffer.from(chartImageB64.data || chartImageB64, "base64") : null
-	var embed = EGI.memberAchievementTimelineChart(member, term, chartImage)
-	SEND.embed(message, embed)
+	if (!member) {
+		SEND.embed(message, EGI.ENTITY_UNFOUND.setDescription(`Could not find member '${username}'.`))
+		return
+	}
+	const { term: chartTerm, chartImage } = await buildMemberProgressChart(
+		member,
+		term,
+		(id, normalizedTerm) => DAT.V4API.getMemberAchievementChart(id, normalizedTerm),
+		CHART_RENDERER.renderChart.bind(CHART_RENDERER)
+	)
+	SEND.embed(message, EGI.memberAchievementTimelineChart(member, chartTerm, chartImage))
 }
 
 async function sendActivityMsg(message, member, targetType = undefined, sortBy = undefined, sortOrder = undefined, limit = 40) {
@@ -541,9 +549,12 @@ async function sendActivityMsg(message, member, targetType = undefined, sortBy =
 		e.unshift([Date.parse(orderedDates[orderedDates.length - 1]) || (new Date()).getTime(), e.length || 0])
 		e.push([Date.parse(orderedDates[0]) || (new Date()).getTime(), 0])
 	})
-	console.warn(member, series, dateRange)
-	var chartImageB64 = await CHART_RENDERER.renderChart(member, null, null, "userActivity", series, dateRange)
-	var chartImage = chartImageB64 ? new Buffer.from(chartImageB64.data || chartImageB64, "base64") : null
+	const chartImage = await buildMemberActivityChart(
+		member,
+		series,
+		dateRange,
+		CHART_RENDERER.renderChart.bind(CHART_RENDERER)
+	)
 	SEND.embed(message, EGI.memberActivity(member, limit, targetType, sortOrder, sortBy, chartImage))
 }
 
@@ -843,7 +854,7 @@ async function handleMessage(message) {
 							break
 						}
 						case "getMemberRank": SEND.embed(message, EGI.memberRank(DAT.resolveEnt(P.username, "member", false, message))); break
-						case "getMemberChart": sendMemberChartMsg(message, H.sAcc(DAT.resolveEnt(P.username, "member", false, message), "name"), (P.interval ? P.interval : "1Y")); break
+						case "getMemberChart": sendMemberChartMsg(message, H.sAcc(DAT.resolveEnt(P.username, "member", false, message), "name") || P.username, normalizeChartTerm(P.interval)); break
 						case "filterMemberOwns": sendActivityMsg(message, DAT.resolveEnt(P.username, "member", false, message),
 							P.targettype, P.sortby, P.sortorder, P.limit || 24); break
 						case "filterTargets": SEND.embed(message, EGI.filteredTargets(DAT.filterEnt(message,

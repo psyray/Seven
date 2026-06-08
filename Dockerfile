@@ -9,7 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
+    PUPPETEER_EXECUTABLE_PATH=/usr/lib/chromium/chromium \
+    CHROME_USER_DATA_DIR=/tmp/chrome-user-data \
+    HOME=/tmp \
     NODE_ENV=production \
     LOG_DIR=/var/log/sevenbot \
     ACCEPT_HIGHCHARTS_LICENSE=YES

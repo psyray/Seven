@@ -32,6 +32,40 @@ function substitutePlaceholders(text, samples = DEFAULT_SAMPLES) {
 }
 
 /**
+ * Split "a / b" help alternatives; avoid orphan fragments like "retire?" or "newest".
+ * @param {string} text
+ * @returns {string[]}
+ */
+function splitHelpAlternatives(text) {
+	const trimmed = text.trim()
+	if (!trimmed.includes("/")) return [trimmed]
+	const parts = trimmed.split(/\s*\/\s*/).map(p => p.trim()).filter(Boolean)
+	const isFragment = (part) => part.replace(/[?.,!]/g, "").trim().split(/\s+/).length < 2
+	if (parts.some(isFragment)) {
+		return [trimmed.replace(/\s*\/\s*/g, " / ")]
+	}
+	return parts
+}
+
+/**
+ * @param {string} raw
+ * @param {Record<string, string>} samples
+ * @returns {string[]}
+ */
+function extractPromptsFromHelpLine(raw, samples = DEFAULT_SAMPLES) {
+	const prompts = []
+	const quotedRx = /"([^"]+)"/g
+	let match
+	while ((match = quotedRx.exec(raw)) !== null) {
+		for (const part of splitHelpAlternatives(match[1])) {
+			const prompt = substitutePlaceholders(part.replace(/^`|`$/g, "").trim(), samples)
+			if (prompt.length >= 3) prompts.push(prompt)
+		}
+	}
+	return prompts
+}
+
+/**
  * @param {HelpRole} [role]
  * @param {Record<string, string>} [samples]
  * @returns {{ id: string, prompt: string, role: HelpRole, source: string }[]}
@@ -39,20 +73,18 @@ function substitutePlaceholders(text, samples = DEFAULT_SAMPLES) {
 function buildHelpPromptCatalog(role = "member", samples = DEFAULT_SAMPLES) {
 	const help = strings.buildHelpMessages(role, { isUniversity: false }).join("\n")
 	const catalog = []
-	const lineRx = /^-\s+(?:║\s+)?(?:"([^"]+)"|(.+))/
+	const lineRx = /^-\s+(?:║\s+)?(.+)/
 	let index = 0
 
 	for (const line of help.split("\n")) {
 		const match = line.match(lineRx)
 		if (!match) continue
-		const raw = (match[1] || match[2] || "").trim()
+		const raw = (match[1] || "").trim()
 		if (!raw || raw.startsWith("#") || raw.includes("prefix with")) continue
 		if (/^(In DMs|Type an HTB|Just type|Works for|Names are|Link your|Achievements|Re-ask|Captains)/i.test(raw)) continue
+		if (!/"[^"]+"/.test(raw)) continue
 
-		const parts = raw.split(/\s*\/\s*/).map(p => p.replace(/^`|`$/g, "").trim()).filter(Boolean)
-		for (const part of parts) {
-			const prompt = substitutePlaceholders(part, samples)
-			if (prompt.length < 3) continue
+		for (const prompt of extractPromptsFromHelpLine(raw, samples)) {
 			catalog.push({
 				id: `help-${role}-${++index}`,
 				prompt,
@@ -94,6 +126,8 @@ const SMOKE_TAG_RX = /\[SMOKE:([^\]]+)\]/
 module.exports = {
 	DEFAULT_SAMPLES,
 	substitutePlaceholders,
+	splitHelpAlternatives,
+	extractPromptsFromHelpLine,
 	buildHelpPromptCatalog,
 	buildRunnablePrompts,
 	smokeTaggedPrompt,
