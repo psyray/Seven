@@ -21,6 +21,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
+# Application config
+COPY config/htb.js ./config/htb.js
 COPY . .
 
 RUN addgroup --system seven && adduser --system --ingroup seven seven \
