@@ -319,11 +319,12 @@ async function main() {
 	if (!DEV_MODE_ON) {
 		await DAT.syncAgent()
 		try {
-			const missingSections = DAT.getSectionsNeedingUpdate(false)
+			const missingSections = DAT.getSectionsNeedingUpdate({})
 			if (missingSections.length) {
 				log.info("Starting HTB data refresh on boot", {
-					mode: DAT.FIRST_RUN ? "first-run-full" : "partial",
+					mode: DAT.FIRST_RUN ? "first-run" : "partial-bootstrap",
 					sections: missingSections,
+					plan: DAT.describeUpdatePlan(missingSections, {}),
 				})
 			} else {
 				log.info("Skipping HTB API refresh on boot — using cached DB data", {
@@ -686,11 +687,13 @@ async function admin_setStatus(message, params) {
 
 async function forceUpdate(message) {
 	if (isCaptain(message.author) || isAdmin(message.author)) {
-		SEND.human(message, H.any("You're the boss!\nupdating the DB 😊",
-			"Ok " + message.author.username + ", you got it!",
+		const plan = DAT.describeUpdatePlan(DAT.getSectionsNeedingUpdate({ force: true }), { force: true })
+		SEND.human(message, H.any("You're the boss!\nSmart sync in progress 😊",
+			"Ok " + message.author.username + ", refreshing team data!",
 			"you got it, boss! 😁",
 			"no prob, i'm on it 🍉",
-			"ok, on it! 🍉"), false)
+			"ok, on it! 🍉") + `\n(${plan})`, false)
+		log.info("Force update requested", { plan })
 		await refresh({ force: true })
 		console.log("Data refresh completed!")
 		DAT.syncDbExportFields()
@@ -717,7 +720,7 @@ async function admin_clearCached(message) {
 		DAT.ENDGAMES = {}
 		DAT.PROLABS = {}
 		try {
-			await refresh({ force: true })
+			await refresh({ full: true })
 			DAT.syncDbExportFields()
 			await updateCache()
 			await SEND.human(message, H.any("Done! Cache cleared and data refreshed from HTB."), false)

@@ -182,15 +182,26 @@ class Format {
 		return (this.validURL(href) ? href : "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
 	}
 
-	static avatarFullUrl(item){
-		return `https://hackthebox.com${item.avatar}`
-	}
-	static avatar2Url(avatarLink){
-		return (avatarLink ? `https://hackthebox.com${avatarLink}` : null)
+	static avatar2Url(avatarLink) {
+		if (!avatarLink || typeof avatarLink !== "string") return null
+		const trimmed = avatarLink.trim()
+		if (!trimmed || trimmed === "null") return null
+		if (this.validURL(trimmed)) return trimmed
+		const path = trimmed.startsWith("/") ? trimmed : `/${trimmed}`
+		const url = `https://hackthebox.com${path}`
+		return this.validURL(url) ? url : null
 	}
 
-	static memberTeamAvatarUrl(member){
-		return `https://hackthebox.com${member.team.avatar}`
+	static avatarFullUrl(item) {
+		if (!item || typeof item !== "object") return null
+		const avatar = item.avatar || item.avatar_thumb || item.avatar_thumb_url || item.avatarUrl
+		return this.avatar2Url(avatar)
+	}
+
+	static memberTeamAvatarUrl(member) {
+		if (!member) return null
+		const teamAvatar = member.team?.avatar
+		return this.avatar2Url(teamAvatar) || this.avatarFullUrl(member)
 	}
 
 	static teamProfileUrl(team){

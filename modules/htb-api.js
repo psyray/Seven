@@ -10,6 +10,8 @@ const VERBOSE_API_REQUESTS = process.env.HTB_API_LOG_REQUESTS === "true"
 const PROGRESS_EVERY = Number(process.env.HTB_LOG_PROGRESS_EVERY) || 25
 const MACHINE_PROFILE_CONCURRENCY = Math.max(1, Number(process.env.HTB_MACHINE_PROFILE_CONCURRENCY) || 3)
 const MACHINE_LIST_PAGE_SIZE = 100
+const RATE_LIMIT_WAIT_LOG_EVERY_MS = Number(process.env.HTB_RATE_LIMIT_LOG_EVERY_MS) || 15000
+const RATE_LIMIT_WAIT_THRESHOLD_MS = Number(process.env.HTB_RATE_LIMIT_WAIT_THRESHOLD_MS) || 3000
 
 function logBatchProgress(label, current, total) {
 	if (current === 1 || current === total || current % PROGRESS_EVERY === 0) {
@@ -156,11 +158,21 @@ async function fetchOptionalList(api, endpointPath, label) {
 	}
 }
 
+const OPTIONAL_MEMBER_PROFILE_PATH_PREFIXES = [
+	"user/profile/progress/endgame/",
+	"user/profile/progress/machines/os/",
+]
+
+function isOptionalMemberProfilePath(endpointPath) {
+	return OPTIONAL_MEMBER_PROFILE_PATH_PREFIXES.some(prefix => endpointPath.startsWith(prefix))
+}
+
 class HtbApiConnector {
 
 	constructor() {
 		this.API_TOKEN = ""
 		this.throttles = {}
+		this.rateLimitBuckets = {}
 		this.tokenExpiryWarned = false
 		this.throttle = new Throttle({
 			active: true,
@@ -199,6 +211,15 @@ class HtbApiConnector {
 		if (endpoint === "machine/profile/") {
 			throttle.concurrent = MACHINE_PROFILE_CONCURRENCY
 		}
+		this.rateLimitBuckets[endpoint] = {
+			remaining: Number(rLeft),
+			max: Number(rLimit) || 60,
+			updatedAt: Date.now(),
+		}
+	}
+
+	logRateLimitWait(endpointPath, endpoint, phase, meta = {}) {
+		log.info(`HTB rate limit: ${phase} — ${endpointPath}`, { endpoint, ...meta })
 	}
 
 	async refreshTokenIfNeeded() {
@@ -219,6 +240,33 @@ class HtbApiConnector {
 
 		const url = `${base}/${endpointPath}`
 		const started = Date.now()
+		const bucket = this.rateLimitBuckets[endpoint]
+		if (bucket && bucket.remaining <= 0) {
+			this.logRateLimitWait(endpointPath, endpoint, "queue slot empty, waiting for HTB bucket refill", {
+				rateLimitMax: bucket.max,
+				rateLimitRemaining: bucket.remaining,
+			})
+		}
+
+		let waitHeartbeat = null
+		const startWaitHeartbeat = () => {
+			waitHeartbeat = setInterval(() => {
+				const waitedSec = Math.round((Date.now() - started) / 1000)
+				if (waitedSec * 1000 >= RATE_LIMIT_WAIT_THRESHOLD_MS) {
+					this.logRateLimitWait(endpointPath, endpoint, `still waiting (${waitedSec}s)`, {
+						waitedSec,
+					})
+				}
+			}, RATE_LIMIT_WAIT_LOG_EVERY_MS)
+		}
+		startWaitHeartbeat()
+
+		const clearWaitHeartbeat = () => {
+			if (waitHeartbeat) {
+				clearInterval(waitHeartbeat)
+				waitHeartbeat = null
+			}
+		}
 
 		return new Promise((resolve, reject) => {
 			request.agent()
@@ -229,10 +277,19 @@ class HtbApiConnector {
 				.timeout({ response: 120000, deadline: 2400000 })
 				.use(this.getThrottle(endpoint).plugin())
 				.then((response) => {
+					clearWaitHeartbeat()
 					const durationMs = Date.now() - started
 					const rLimit = H.sAcc(response, "headers", "x-ratelimit-limit") || 60
 					const rLeft = H.sAcc(response, "headers", "x-ratelimit-remaining") || 60
 					this.updateThrottle(endpoint, rLimit, rLeft)
+
+					if (durationMs >= RATE_LIMIT_WAIT_THRESHOLD_MS) {
+						this.logRateLimitWait(endpointPath, endpoint, `request completed after ${Math.round(durationMs / 1000)}s wait`, {
+							durationMs,
+							rateLimitRemaining: rLeft,
+							rateLimitMax: rLimit,
+						})
+					}
 
 					const requestMeta = {
 						status: response.status,
@@ -250,6 +307,10 @@ class HtbApiConnector {
 						const err = new Error(`HTTP ${response.status} for ${endpointPath}`)
 						err.status = response.status
 						err.response = response
+						if (response.status === 404 && isOptionalMemberProfilePath(endpointPath)) {
+							log.debug(`Optional member profile endpoint unavailable (404)`, { endpoint: endpointPath })
+							return resolve({ profile: {} })
+						}
 						return reject(err)
 					}
 
@@ -277,6 +338,7 @@ class HtbApiConnector {
 					resolve(response.body)
 				})
 				.catch((err) => {
+					clearWaitHeartbeat()
 					const durationMs = Date.now() - started
 					log.error(`GET ${endpointPath} failed`, {
 						status: err.status,
@@ -721,7 +783,7 @@ class HtbApiConnector {
 			this.getMemberFortressProgress(memberId),
 			this.getMemberProlabProgress(memberId),
 			this.getMemberBloods(memberId)
-		]).then((results) => H.combine(results.map(e => e.profile)))
+		]).then((results) => H.combine(results.map(e => e?.profile || {})))
 	}
 
 	getCompleteMemberProfileByMemberPartial(member) {
@@ -734,7 +796,10 @@ class HtbApiConnector {
 			this.getMemberFortressProgress(member.id),
 			this.getMemberProlabProgress(member.id),
 			this.getMemberBloods(member.id)
-		]).then((results) => H.combine([member, ...results.map(e => e.profile)]))
+		]).then((results) => H.combine([
+			member,
+			...results.map(e => e?.profile || {}),
+		]))
 	}
 
 	getCompleteMemberProfilesByIds(memberIds) {

@@ -189,6 +189,21 @@ function addSingleEntity(displayName, newFieldName){
  * 
  * @param {Entity[]} fieldMap An array of EntityType objects (containing )
  */
+function normalizeEntityField(field) {
+	if (typeof field === "string" && field.length) {
+		return { value: field, synonyms: [field] }
+	}
+	if (field && typeof field === "object" && field.value) {
+		return {
+			value: field.value,
+			synonyms: Array.isArray(field.synonyms) && field.synonyms.length
+				? field.synonyms
+				: [field.value],
+		}
+	}
+	return null
+}
+
 function updateEntity(fields, entityTypeName){
 	var needsUpdate = false
 	class EntityNotFoundError extends Error {}
@@ -213,28 +228,26 @@ function updateEntity(fields, entityTypeName){
 			// console.dir(existingEntityType)
 			var newEntries = []
 			fields.forEach(field => {
-				if (!(existingEntity.entities.some( entity => (typeof field === "object" ? field["value"] : field) == entity.value ))){
+				const entityField = normalizeEntityField(field)
+				if (!entityField) {
+					console.warn(`${LH} Skipping invalid entity field for '${entityTypeName}'`, { field })
+					return
+				}
+				if (!(existingEntity.entities.some(entity => entity.value == entityField.value))){
 					needsUpdate = true
-					console.warn(`Field ${field} did not exist.`)
-					if (typeof field === "object"){
-						existingEntity.entities.push(field)
-						newEntries.push(field.synonyms)
-					} else {
-						existingEntity.entities.push({synonyms:[field], value: field})
-						newEntries.push(field)
-					}
+					console.warn(`Field ${entityField.value} did not exist.`)
+					existingEntity.entities.push(entityField)
+					newEntries.push(entityField.value)
 				} else {
-					// console.warn(`Field ${field} exists already.`)
-					if (typeof field === "object"){
-						var target = existingEntity.entities.find(e => e.value == field.value)
-						const origCount = target.synonyms.length
-						target.synonyms = [...new Set([].concat(target.synonyms,field.synonyms))]
-						newEntries.push(field.synonyms)
-						// console.log(target)
-						if (origCount < target.synonyms.length){
-							needsUpdate = true
-						}
-					} 					
+					const target = existingEntity.entities.find(e => e.value == entityField.value)
+					if (!target) return
+					const origSynonyms = Array.isArray(target.synonyms) ? target.synonyms : []
+					const origCount = origSynonyms.length
+					target.synonyms = [...new Set([].concat(origSynonyms, entityField.synonyms))]
+					newEntries.push(entityField.value)
+					if (origCount < target.synonyms.length) {
+						needsUpdate = true
+					}
 				}
 			})
 			// Replace the EntityType's existing Entities with our new list.

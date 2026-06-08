@@ -34,6 +34,8 @@ const { createLogger } = require("../helpers/logger.js")
 
 const log = createLogger("datastore")
 
+const UPDATE_SECTION_ORDER = ["machines", "specials", "tags", "team", "challenges"]
+
 class SevenDatastore {
 	constructor() {
 		this.UPDATE_LOCK = false
@@ -174,14 +176,28 @@ class SevenDatastore {
 
 	hasCachedTeamData() {
 		return this.hasCachedObject(this.TEAM_MEMBERS)
-			&& Boolean(this.TEAM_STATS?.name || this.TEAM_STATS?.id)
+			&& Boolean(this.TEAM_STATS?.name)
 	}
 
-	getSectionsNeedingUpdate(force = false) {
-		if (force) {
-			return ["machines", "specials", "tags", "team", "challenges"]
-		}
+	hasCachedTeamStats() {
+		return Boolean(this.TEAM_STATS?.name && this.TEAM_STATS?.type)
+	}
 
+	getMemberSyncDependencies() {
+		const deps = []
+		if (!this.hasCachedObject(this.MACHINES)) deps.push("machines")
+		if (!this.hasCachedObject(this.CHALLENGES)) deps.push("challenges")
+		if (
+			this.MISC.FORTRESSES === undefined
+			|| this.MISC.ENDGAMES === undefined
+			|| this.MISC.PROLABS === undefined
+		) {
+			deps.push("specials")
+		}
+		return deps
+	}
+
+	getMissingSections() {
 		const sections = []
 		if (!this.hasCachedObject(this.MACHINES)) sections.push("machines")
 		if (
@@ -197,6 +213,79 @@ class SevenDatastore {
 		}
 		if (!this.hasCachedObject(this.CHALLENGES)) sections.push("challenges")
 		return sections
+	}
+
+	sortUpdateSections(sections) {
+		return UPDATE_SECTION_ORDER.filter(section => sections.includes(section))
+	}
+
+	expandUpdateSections(requested) {
+		const set = new Set(requested)
+		if (set.has("team")) {
+			this.getMemberSyncDependencies().forEach(dep => set.add(dep))
+		}
+		return this.sortUpdateSections([...set])
+	}
+
+	getSectionsNeedingUpdate(options = {}) {
+		const force = Boolean(options.force)
+		const full = Boolean(options.full)
+		const sections = options.sections
+
+		if (full) {
+			return [...UPDATE_SECTION_ORDER]
+		}
+
+		if (Array.isArray(sections) && sections.length) {
+			return this.expandUpdateSections(sections)
+		}
+
+		if (force) {
+			return this.expandUpdateSections(["team"])
+		}
+
+		return this.getMissingSections()
+	}
+
+	describeUpdatePlan(sectionsToUpdate, options = {}) {
+		if (options.full) return "full refresh (all sections)"
+		if (options.force) {
+			const deps = sectionsToUpdate.filter(section => section !== "team")
+			if (deps.length) {
+				return `smart sync: team members + missing dependencies (${deps.join(", ")})`
+			}
+			return "smart sync: team members only"
+		}
+		if (!sectionsToUpdate.length) return "skipped (cache complete)"
+		return `partial bootstrap (${sectionsToUpdate.join(", ")})`
+	}
+
+	extractSpecialTargetFlagNames(flags) {
+		if (!flags) return []
+		if (Array.isArray(flags)) {
+			return flags
+				.map(flag => flag?.title || flag?.name || flag?.flag_title)
+				.filter(name => typeof name === "string" && name.length)
+		}
+		if (typeof flags === "object") {
+			if (Array.isArray(flags.flags)) {
+				return this.extractSpecialTargetFlagNames(flags.flags)
+			}
+			return Object.values(flags)
+				.filter(flag => flag && typeof flag === "object" && (flag.title || flag.name || flag.flag_title))
+				.map(flag => flag.title || flag.name || flag.flag_title)
+				.filter(name => typeof name === "string" && name.length)
+		}
+		return []
+	}
+
+	getDialogflowSpecialTargetFlagNames() {
+		const specials = [
+			...Object.values(this.MISC.PROLABS || {}),
+			...Object.values(this.MISC.FORTRESSES || {}),
+			...Object.values(this.MISC.ENDGAMES || {}),
+		]
+		return [...new Set(specials.flatMap(entry => this.extractSpecialTargetFlagNames(entry.flags)))]
 	}
 
 	syncAgent() {
@@ -222,8 +311,10 @@ class SevenDatastore {
 	}
 
 	async update(options = {}) {
+		const full = Boolean(options.full)
 		const force = Boolean(options.force)
-		const sectionsToUpdate = this.getSectionsNeedingUpdate(force)
+		const sectionsToUpdate = this.getSectionsNeedingUpdate(options)
+		const updatePlan = this.describeUpdatePlan(sectionsToUpdate, options)
 
 		if (!sectionsToUpdate.length) {
 			log.info("HTB data update skipped — using cached DB data", {
@@ -238,9 +329,7 @@ class SevenDatastore {
 		if (!this.UPDATE_LOCK) {
 			this.UPDATE_LOCK = true
 			const updateStarted = Date.now()
-			this.logUpdateProgress(force
-				? "HTB data update started (forced full refresh)"
-				: `HTB data update started (partial: ${sectionsToUpdate.join(", ")})`)
+			this.logUpdateProgress(`HTB data update started (${updatePlan})`)
 			try {
 				if (sectionsToUpdate.includes("machines")) {
 					const machinesStarted = Date.now()
@@ -266,13 +355,13 @@ class SevenDatastore {
 				if (sectionsToUpdate.includes("specials")) {
 					const specialsStarted = Date.now()
 					this.logUpdatePhase("2/5", "Fetching fortresses, endgames and pro labs")
-					if (force || this.MISC.FORTRESSES === undefined) {
+					if (full || this.MISC.FORTRESSES === undefined) {
 						this.MISC.FORTRESSES = await this.V4API.getAllFortresses()
 					}
-					if (force || this.MISC.ENDGAMES === undefined) {
+					if (full || this.MISC.ENDGAMES === undefined) {
 						this.MISC.ENDGAMES = await this.V4API.getAllEndgames()
 					}
-					if (force || this.MISC.PROLABS === undefined) {
+					if (full || this.MISC.PROLABS === undefined) {
 						this.MISC.PROLABS = await this.V4API.getAllProlabs()
 					}
 					log.info("Special targets collected", {
@@ -301,42 +390,70 @@ class SevenDatastore {
 				if (sectionsToUpdate.includes("team")) {
 					const teamStarted = Date.now()
 					this.logUpdatePhase("4/5", "Fetching team / university data and member profiles")
+					const shouldRefreshTeamStats = full || !this.hasCachedTeamStats()
+					const shouldRefreshTeamMembers = full || force || !this.hasCachedObject(this.TEAM_MEMBERS)
+
 					if (process.env.HTB_TEAM_ID) {
 						log.info("Using HTB_TEAM_ID", { teamId: process.env.HTB_TEAM_ID })
-						this.TEAM_STATS = await this.V4API.getCompleteTeamProfile(
-							process.env.HTB_TEAM_ID
-						)
-						delete this.TEAM_STATS.weekly
-						var TEAM_MEMBERS_BASE = await this.V4API.getTeamMembers(
-							process.env.HTB_TEAM_ID,
-							Object.keys(this.TEAM_MEMBERS_IGNORED)
-						)
-						log.info("Team members listed", { count: TEAM_MEMBERS_BASE.length })
-						this.TEAM_MEMBERS =
-							await this.V4API.getCompleteMemberProfilesByMemberPartials(
-								TEAM_MEMBERS_BASE
+						if (shouldRefreshTeamStats) {
+							log.info("Fetching team profile")
+							this.TEAM_STATS = await this.V4API.getCompleteTeamProfile(
+								process.env.HTB_TEAM_ID
 							)
+							delete this.TEAM_STATS.weekly
+							log.info("Team profile ready", { name: this.TEAM_STATS?.name })
+						} else {
+							log.info("Skipping team stats — using cached profile", { name: this.TEAM_STATS?.name })
+						}
+
+						if (shouldRefreshTeamMembers) {
+							var TEAM_MEMBERS_BASE = await this.V4API.getTeamMembers(
+								process.env.HTB_TEAM_ID,
+								Object.keys(this.TEAM_MEMBERS_IGNORED)
+							)
+							log.info("Team members listed", { count: TEAM_MEMBERS_BASE.length })
+							this.TEAM_MEMBERS =
+								await this.V4API.getCompleteMemberProfilesByMemberPartials(
+									TEAM_MEMBERS_BASE
+								)
+							log.info("Team member profiles ready", { count: Object.keys(this.TEAM_MEMBERS).length })
+						} else {
+							log.info("Skipping team members — using cached profiles", {
+								count: Object.keys(this.TEAM_MEMBERS).length,
+							})
+						}
 					} else if (process.env.HTB_UNIVERSITY_ID) {
 						log.info("Using HTB_UNIVERSITY_ID", { universityId: process.env.HTB_UNIVERSITY_ID })
-						var UNI_MEMBERS_BASE = await this.V4API.getUniversityMembers(
-							process.env.HTB_UNIVERSITY_ID,
-							Object.keys(this.TEAM_MEMBERS_IGNORED)
-						)
-						this.TEAM_MEMBERS =
-							await this.V4API.getCompleteMemberProfilesByMemberPartials(
-								UNI_MEMBERS_BASE
+						if (shouldRefreshTeamMembers) {
+							var UNI_MEMBERS_BASE = await this.V4API.getUniversityMembers(
+								process.env.HTB_UNIVERSITY_ID,
+								Object.keys(this.TEAM_MEMBERS_IGNORED)
 							)
-						var uniProfile = await this.V4API.getUniversityProfile(
-							process.env.HTB_UNIVERSITY_ID
-						)
-						var captain = UNI_MEMBERS_BASE.find(member => member.role === "admin") || UNI_MEMBERS_BASE[0]
-						this.TEAM_STATS = Object.assign({}, uniProfile || {}, {
-							avatar_url: `https://www.hackthebox.com/storage/universities/${Number(
+							this.TEAM_MEMBERS =
+								await this.V4API.getCompleteMemberProfilesByMemberPartials(
+									UNI_MEMBERS_BASE
+								)
+							log.info("University member profiles ready", { count: Object.keys(this.TEAM_MEMBERS).length })
+						}
+						if (shouldRefreshTeamStats || !this.hasCachedTeamStats()) {
+							var uniMembersForCaptain = shouldRefreshTeamMembers
+								? UNI_MEMBERS_BASE
+								: await this.V4API.getUniversityMembers(
+									process.env.HTB_UNIVERSITY_ID,
+									Object.keys(this.TEAM_MEMBERS_IGNORED)
+								)
+							var uniProfile = await this.V4API.getUniversityProfile(
 								process.env.HTB_UNIVERSITY_ID
-							)}.png`,
-							type: "university",
-							captain: captain ? { id: captain.id, name: captain.name } : null,
-						})
+							)
+							var captain = uniMembersForCaptain.find(member => member.role === "admin") || uniMembersForCaptain[0]
+							this.TEAM_STATS = Object.assign({}, uniProfile || {}, {
+								avatar_url: `https://www.hackthebox.com/storage/universities/${Number(
+									process.env.HTB_UNIVERSITY_ID
+								)}.png`,
+								type: "university",
+								captain: captain ? { id: captain.id, name: captain.name } : null,
+							})
+						}
 					} else {
 						log.warn("No HTB_TEAM_ID or HTB_UNIVERSITY_ID configured — skipping team data")
 					}
@@ -373,10 +490,7 @@ class SevenDatastore {
 				this.logUpdatePhase("sync", "Updating Dialogflow entities")
 				try {
 					dFlowEnt.updateEntity(
-						Object.values(this.MISC.PROLABS || {})
-							.flat()
-							.map((e) => Object.values(e.flags))
-							.flat(),
+						this.getDialogflowSpecialTargetFlagNames(),
 						"specialTargetFlagName"
 					)
 					dFlowEnt.updateEntity(
@@ -423,16 +537,6 @@ class SevenDatastore {
 						Object.values(this.CHALLENGES).map((challenge) => challenge.name),
 						"challenge"
 					)
-					dFlowEnt.updateEntity(
-						Object.values(this.TEAM_MEMBERS).map((member) => ({
-							value: member.name,
-							synonyms: [
-								member.name,
-								...this.getDiscordUserSynonymsForUid(member.id, names),
-							],
-						})),
-						"memberName"
-					)
 				} catch (error) {
 					log.warn("Dialogflow entity sync failed", { message: error.message })
 				}
@@ -453,8 +557,8 @@ class SevenDatastore {
 					challenges: Object.keys(this.CHALLENGES).length,
 					members: Object.keys(this.TEAM_MEMBERS).length,
 					teamName: this.TEAM_STATS?.name || null,
+					plan: updatePlan,
 					sections: sectionsToUpdate,
-					forced: force,
 					durationMs: Date.now() - updateStarted,
 				})
 				return true
