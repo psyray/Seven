@@ -574,13 +574,30 @@ function understand(message) {
 	)
 }
 
+/**
+ * @param {import("discord.js").Message} message
+ * @param {string} [note]
+ */
 async function sendHelpMsg(message, note) {
 	if (note) {
 		console.log("NOTE: " + note)
 		await SEND.human(message, note, true)
 	}
 	await H.wait(300)
-	await message.channel.send(strings.manual)
+
+	const role = isAdmin(message.author)
+		? "admin"
+		: isCaptain(message.author)
+			? "captain"
+			: "member"
+	const helpChunks = strings.buildHelpMessages(role, {
+		isUniversity: Boolean(process.env.HTB_UNIVERSITY_ID),
+	})
+
+	for (const chunk of helpChunks) {
+		await message.channel.send(chunk)
+		if (helpChunks.length > 1) await H.wait(250)
+	}
 }
 
 async function linkDiscord(message, idType, id) {
