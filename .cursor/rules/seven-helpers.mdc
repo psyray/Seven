@@ -1,0 +1,39 @@
+---
+description: Helpers, formatting, logging, and DialogFlow sync
+globs: "{helpers/**/*.js,static/strings.js}"
+alwaysApply: false
+---
+
+# Helpers & Utilities
+
+## Logger
+
+```javascript
+const { createLogger } = require("../helpers/logger.js")
+const log = createLogger("my-module")
+log.info("message", { key: "value" })  // structured meta
+```
+
+Levels: `LOG_LEVEL` env (default `info`). Files: `sevenbot.log`, `sevenbot-error.log`.
+
+## Format (`helpers/format.js`)
+
+Static methods on `Format` class — colors (`COL.HTB_GREEN`), markdown links, dates, unicode styling (`STL`).
+
+## Helpers (`helpers/helpers.js`)
+
+`H.sAcc(obj, ...keys)` safe nested access, `H.any(...)` random choice, `H.wait(ms)`, `H.maybe(prob)`.
+
+## DialogFlow (`helpers/dflow.js`)
+
+Syncs entity types (machines, challenges, members, flags) upstream/downstream. Special flag names extracted via `SevenDatastore.getDialogflowSpecialTargetFlagNames()` — handles array/object flag shapes.
+
+## NLP (`helpers/nlp.js`, `modules/nlp/`)
+
+`checkSelfName()`, typoify for human-like responses.
+
+## Conventions
+
+- Export pattern: `module.exports = { Format }` or `class` + named export
+- JSDoc typedefs live in `models/api-classes.js`, domain classes in `helpers/classes.js`
+- New helper functions: only if reused 3+ times; otherwise inline

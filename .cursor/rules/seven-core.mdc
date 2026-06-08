@@ -1,0 +1,42 @@
+---
+description: Seven bot core architecture, conventions, and file map
+alwaysApply: true
+---
+
+# Seven — Core Conventions
+
+## Stack
+
+Node.js (Docker: 20, local: >=16), discord.js v12, DialogFlow, pg-promise, superagent, winston.
+
+## Module aliases
+
+| Symbol | Module | Role |
+|--------|--------|------|
+| `DAT` | `SevenDatastore` | HTB cache + sync |
+| `EGI` | `HtbEmbeds` | Embed builders |
+| `SEND` | `Send` | Discord delivery |
+| `F` | `Format` | Formatting |
+| `H` | `Helpers` | Utilities |
+| `E` | `HTBEmoji` | Custom emoji |
+| `V4` / `V4API` | `HtbApiConnector` | HTB API client |
+
+## Rules
+
+1. **v4-only auth** — never reintroduce v3 session/cookie login; use `HTB_V4_TOKEN`
+2. **Partial sync** — startup must skip cached sections; use `getSectionsNeedingUpdate()` logic
+3. **Null-safe caches** — initialize empty objects as `{}`, guard before `Object.values()`
+4. **Logging** — use `createLogger("name")`, not raw `console.log` for new code in modules
+5. **Embeds** — every `MessageEmbed` needs `.setDescription()` (Discord API requirement)
+6. **Env** — single template: `static/templates/.env.docker.example`; no `.env_sample`
+7. **Scope** — minimal diffs; match existing patterns (classes, naming, error style)
+
+## Intent routing
+
+New DialogFlow intents: add case in `bot.js` `handleMessage` switch, embed in `views/embeds.js`, entity sync in `helpers/dflow.js` if needed.
+
+## Do not
+
+- Commit `.env`, tokens, or `GOOGLE_APPLICATION_CREDENTIALS` content
+- Use `DATABASE_URL` in Docker (use `PGHOST` injected by compose)
+- Break `UPDATE_LOCK` semantics or run concurrent `DAT.update()` calls

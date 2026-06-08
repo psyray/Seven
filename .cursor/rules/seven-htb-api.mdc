@@ -1,0 +1,61 @@
+---
+description: HTB API connector and datastore sync patterns
+globs: "{modules/htb-api.js,config/htb.js,models/SevenDatastore.js,models/api-classes.js}"
+alwaysApply: false
+---
+
+# HTB API & Datastore
+
+## Auth & bases
+
+```javascript
+// config/htb.js — never hardcode URLs outside this file
+HTB_API_BASE    // v4 — default https://labs.hackthebox.com/api/v4
+HTB_API_V5_BASE // v5 — machine list pagination
+HTB_APP_BASE    // https://app.hackthebox.com — profile/badge URLs
+```
+
+Token: `process.env.HTB_V4_TOKEN`. Expired token → log warn + throw; user must regenerate App Token.
+
+## htb-api.js patterns
+
+- All requests via `htbApiGet(endpointPath, parseText, { base })`
+- Throttle per endpoint key (`getThrottleEndpointKey`); respect `x-ratelimit-*` headers
+- Rate-limit waits logged at `info` when wait exceeds threshold
+- Machine list: v5 paginated (`MACHINE_LIST_PAGE_SIZE=100`), profiles: v4 selective enrichment
+- Normalize v5 machines with `normalizeV5Machine()` before storing
+- Paginated responses: `extractPaginatedItems(response)` handles `data`/`message`/`info`
+
+## SevenDatastore sync
+
+```javascript
+// Section order (never reorder without updating logs)
+["machines", "specials", "tags", "team", "challenges"]
+
+// Options
+update()              // missing sections only
+update({ force: true }) // team + missing deps
+update({ full: true })  // everything
+update({ sections: ["machines"] }) // explicit
+```
+
+- `force` ≠ `full`: force refreshes team members, not all machines/challenges
+- `getMemberSyncDependencies()` auto-adds machines/challenges/specials if missing
+- Specials stored in `MISC.FORTRESSES`, `MISC.ENDGAMES`, `MISC.PROLABS`
+- After update: `syncDbExportFields()` + `updateCache()` in bot.js
+
+## Adding a new HTB endpoint
+
+1. Add method to `HtbApiConnector` in `htb-api.js`
+2. Normalize response to match existing cache shape (see `api-classes.js` typedefs)
+3. Wire into appropriate `update()` phase or on-demand getter in `SevenDatastore`
+4. Add progress logging with `logBatchProgress()` for bulk fetches
+
+## Env tuning
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `HTB_LOG_PROGRESS_EVERY` | 25 | Bulk fetch progress interval |
+| `HTB_MACHINE_PROFILE_CONCURRENCY` | 3 | Parallel profile fetches |
+| `HTB_API_LOG_REQUESTS` | false | Verbose request logging |
+| `HTB_RATE_LIMIT_WAIT_THRESHOLD_MS` | 3000 | When to log rate-limit waits |

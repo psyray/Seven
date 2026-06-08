@@ -1,0 +1,54 @@
+---
+description: Discord embeds, messaging, and intent handlers
+globs: "{bot.js,views/embeds.js,modules/send.js,helpers/discord-message-constructors.js,helpers/emoji.js}"
+alwaysApply: false
+---
+
+# Discord Layer
+
+## Embed rules (discord.js v12)
+
+```javascript
+// ❌ BAD — Discord API 400: embed.description required
+new MessageEmbed().setTitle("Team Info")
+
+// ✅ GOOD
+new MessageEmbed().setTitle("Team Info").setDescription("…")
+```
+
+Use base embeds from `HtbEmbeds`: `TARGET_INFO_BASE`, `TEAM_INFO_BASE`, `ERROR_BASE`, etc.
+
+## Empty data guards
+
+When cache is empty, return helpful embeds (not crash):
+
+```javascript
+// views/embeds.js pattern
+if (!this.ds.TEAM_STATS?.name) {
+  return this.ERROR_BASE
+    .setTitle("Team data unavailable")
+    .setDescription("HTB team data is not loaded yet. Try `seven force update`…")
+}
+```
+
+## Message flow
+
+1. `handleMessage()` → `understand()` (DialogFlow) or `resolveEnt()` (direct entity)
+2. Intent handler in `bot.js` switch → `EGI.method()` → `SEND.embed()` or `SEND.human()`
+3. `Send.embed()` handles typing delay, pickle mode, passthru
+
+## resolveEnt()
+
+Central entity resolver in `SevenDatastore`. Always pass `discordMessage` for self-reference ("i", "me"). Guard nested lookups when `MISC.FORTRESSES` etc. may be `{}`.
+
+## Adding a feature
+
+1. DialogFlow intent (or extend `resolveEnt` for direct queries)
+2. Handler case in `bot.js`
+3. Embed method in `HtbEmbeds` (views/embeds.js)
+4. If new entity type: update `helpers/dflow.js` entity sync + `helpers/classes.js`
+
+## Admin commands
+
+- `forceUpdate` → `refresh({ force: true })` — smart team sync
+- `admin_clearCached` → `refresh({ full: true })` — full re-fetch

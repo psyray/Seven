@@ -134,6 +134,8 @@ Looking for help deploying or troubleshooting your own Seven instance? Please jo
  
 There is decent documentation for the codebase itself here, if you'd like to understand how it works or use some parts in your own project: [Seven Docs](https://propolisa.github.io/Seven/index.html)
 
+For AI-assisted development (Cursor rules, skills, and architecture overview), see [AGENTS.md](AGENTS.md).
+
 ## 📜 Roadmap / TODO:
 
 Some features / nice-to-haves that are under consideration:

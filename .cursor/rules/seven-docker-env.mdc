@@ -1,0 +1,46 @@
+---
+description: Docker Compose deployment and environment variables
+globs: "{docker-compose*.yml,Dockerfile,.dockerignore,static/templates/.env*,app.json,run.sh}"
+alwaysApply: false
+---
+
+# Docker & Environment
+
+## Setup
+
+```bash
+cp static/templates/.env.docker.example .env
+# Edit secrets (BOT_TOKEN, HTB_V4_TOKEN, GOOGLE_APPLICATION_CREDENTIALS, POSTGRES_PASSWORD)
+npm run docker:up
+npm run docker:logs   # watch startup sync
+```
+
+## Postgres password trap
+
+`POSTGRES_PASSWORD` is set **only on first volume init**. Changing `.env` later does not update the DB.
+
+Fix: `npm run docker:reset-db && npm run docker:up` (destroys data) or `ALTER USER` inside container.
+
+## Env rules
+
+| Variable | Docker | Notes |
+|----------|--------|-------|
+| `PGHOST`/`PGUSER`/… | Injected by compose | Do not use `DATABASE_URL` |
+| `DATABASE_URL` | Non-Docker only | Heroku/local without compose |
+| `API_SERVER_*` | Only if `API_SERVER_ENABLED=true` | Otherwise remove from `.env` |
+| `IS_DEV_INSTANCE` | Optional `true` | Restricts bot to dev queries |
+| `LOG_DIR` | `/var/log/sevenbot` | Mounted volume `seven_logs` |
+
+## Docker image
+
+- Base: `node:20-bookworm-slim` with Chromium (charts/Puppeteer)
+- Read-only root, `cap_drop: ALL`, `dumb-init` entrypoint
+- Healthcheck: `pgrep -f 'node bot.js'`
+
+## npm scripts
+
+`docker:build`, `docker:up`, `docker:down`, `docker:reset-db`, `docker:logs`, `docker:restart`
+
+## Dev override
+
+Copy `docker-compose.override.yml.example` for local dev tweaks (`IS_DEV_INSTANCE=true`, port exposure).

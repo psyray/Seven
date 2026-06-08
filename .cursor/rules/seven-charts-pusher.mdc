@@ -1,0 +1,27 @@
+---
+description: Charts rendering, Pusher notifications, and optional API server
+globs: "{modules/charts/**,helpers/pusher-htb.js,modules/seven-api-server.js,modules/seven-api-connector.js}"
+alwaysApply: false
+---
+
+# Charts, Pusher & API Server
+
+## Charts (`modules/charts/`)
+
+- Entry: `modules/charts/index_new.js` → `htbCharts` in bot.js
+- Uses patched Highcharts renderer + Puppeteer/Chromium (Docker: `PUPPETEER_EXECUTABLE_PATH`)
+- Member charts triggered by `getMemberChart` intent in bot.js
+- License: `ACCEPT_HIGHCHARTS_LICENSE=YES` in Dockerfile
+
+## Pusher (`helpers/pusher-htb.js`)
+
+- Real-time HTB achievement notifications to `DISCORD_ANNOUNCE_CHAN_ID`
+- Initialized after Discord client ready; logs via `createLogger("pusher-htb")`
+- `DEV_MODE_ON` uses local `cache/PUSHER_MSG_LOG.json` instead of live events
+
+## Optional API server
+
+Only active when `API_SERVER_ENABLED=true`:
+- `modules/seven-api-server.js` — Express + passport-discord
+- Requires `API_SERVER_PORT`, `API_SERVER_URL`, Discord OAuth credentials
+- Do not document these vars as required in env templates
