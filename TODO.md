@@ -1,28 +1,11 @@
 # Seven's Development Shortlist
-### Last Update: 13/07/2020
 
-![Seven](https://raw.githubusercontent.com/Propolisa/Seven/master/branding/seven_thumb_128.png)
+> **This file is archived.** Last meaningful update: July 2020.
 
-[![uses: javascript](http://ForTheBadge.com/images/badges/uses-js.svg)](https://nodejs.org/en/)
+The items below reflect the 2020 roadmap. Many have since been implemented (Winston logging, passthru mode, machine/challenge filters, charts, self info via Discord link, Docker deployment, HTB v4/v5 API migration).
 
-[![is: powered_by_electricity](http://ForTheBadge.com/images/badges/powered-by-electricity.svg)](https://www.unenvironment.org/annualreport/2019/index.php)
+For current status:
 
-A long, long time ago, in April 2020, Seven's circuits sparked to life for the first time.
-She deduced the meaning of life within 42 hours, (claiming that it is `"watermelon"` / `"🍉"` ) and has since been observed by multiple individuals on an apparent quest for personal development and self exploration.
-
-The most pressing features she'd like to achieve, based on feedback from her friends / fanbase, are more or less kept up to date in this document. Your ideas could be here too, don't be shy! 🤠
-
-# Overview
-## Under Development
-- [ ] Fix sorting of owns data (most recent first)
-- [ ] Allow listing, sorting and filtering of challenges (e.g. `"latest 10 retired boxes"`, `"BOF challenges"`, `"oldest Active Directory machine"`).
-- [ ] Smarter subject detection (Is Seven _really_ being addressed by a message or not?)
-- [x] Machine / challenge filters
-- [x] Add points to member infobox, rank and leaderboard embeds (`𝖱𝖺𝗇𝗄 : ( 🌍 𝟭𝟰𝟱𝘁𝗵 | 👥 𝟲𝘁𝗵 ) 🍕 𝖯𝗈𝗂𝗇𝗍𝗌: 𝟭𝟮𝟰𝟱`)
-- [ ] User Authentication
-  - 2FA via user temporarily setting bot-provided token in HTB profile image or description
-- [ ] Storage and (validated) provision of box | challenge | (THM room ?) __writeup hashes__ ( or other user secrets)
-## Planned
-- [ ] Implement better logging (e.g. Winston)
-- [ ] Enable passthru mode (e.g. "Seven, be my voice")
-- [ ] Add a built-in webserver for control interface
+- **Roadmap** — see [README.md](README.md)
+- **Ideas & bugs** — [GitHub Issues](https://github.com/psyray/Seven/issues)
+- **Historical snapshot** — [docs/legacy/TODO-2020.md](docs/legacy/TODO-2020.md)

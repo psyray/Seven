@@ -834,13 +834,16 @@ class SevenDatastore {
 		} else if (name) {
 			return this.V4API.getMemberIdFromUsername(name)
 				.then((resolvedId) =>
-					this.V4API.getCompleteMemberProfileById(resolvedId)
+					resolvedId
+						? this.V4API.getCompleteMemberProfileById(resolvedId)
+						: null
 				)
 				.then((member) =>
 					member && member.name
 						? Object.assign({ type: "member" }, member)
-						: member
+						: null
 				)
+				.catch(() => null)
 		}
 	}
 

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>helpers/pusher-htb.js - Documentation</title>
+
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="https://code.ionicframework.com/ionicons/2.0.1/css/ionicons.min.css">
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav>
+    <li class="nav-link nav-home-link"><a href="index.html">Home</a></li><li class="nav-heading">Classes</li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="Format.html">Format</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.andifyList">andifyList</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.challengeCategoryNameToIconFile">challengeCategoryNameToIconFile</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.convertProLabDescription">convertProLabDescription</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.elapsedDays">elapsedDays</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.fuzzyAge">fuzzyAge</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.getFlag">getFlag</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.halfMoon">halfMoon</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.mdItemizeList">mdItemizeList</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.nth">nth</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.numS">numS</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.osNameToIconFile">osNameToIconFile</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.randomDominoes">randomDominoes</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.ratingString">ratingString</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.timeSince">timeSince</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.timeSinceSmall">timeSinceSmall</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="HTBEmoji.html">HTBEmoji</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Challenge.html">Challenge</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Endgame.html">Endgame</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-EndgameEntry.html">EndgameEntry</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-EndgameProfile.html">EndgameProfile</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Fortress.html">Fortress</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-FortressEntry.html">FortressEntry</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-FortressProfile.html">FortressProfile</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Machine.html">Machine</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-ProLab.html">ProLab</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-ProLabEntry.html">ProLabEntry</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-ProLabInfo.html">ProLabInfo</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-ProLabOverview.html">ProLabOverview</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Team.html">Team</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Track.html">Track</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-University.html">University</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-User.html">User</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Classes-HtbFeedbackForChart.html">HtbFeedbackForChart</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Classes.html#~HtbMaker">HtbMaker</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Classes-HtbSpecialFlag.html">HtbSpecialFlag</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-HtbEmbeds-HtbEmbeds.html">HtbEmbeds</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-HtbEmbeds-HtbEmbeds.html#embedSubdivide">embedSubdivide</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-HtbEmbeds-HtbEmbeds.html#pusherOwn">pusherOwn</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Pusher-Htb-HtbPusherEvent.html">HtbPusherEvent</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Pusher-Htb.html#~HtbPusherSubscription">HtbPusherSubscription</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Pusher-Htb.html#~HtbPusherSubscription#alertSeven">alertSeven</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Send-Send.html">Send</a></span></li><li class="nav-heading">Modules</li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-ApiClasses.html">ApiClasses</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Classes.html">Classes</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Helpers.html">Helpers</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Helpers.html#~asyncForEach">asyncForEach</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Helpers.html#~wait">wait</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-HerokuDualstackProxy.html">HerokuDualstackProxy</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-HtbEmbeds.html">HtbEmbeds</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Nlp.html">Nlp</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Nlp.html#~checkSelfName">checkSelfName</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Nlp.html#~extractTargetNameFromMessage">extractTargetNameFromMessage</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Nlp.html#~resolveLocalIntent">resolveLocalIntent</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Pusher-Htb.html">Pusher-Htb</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Pusher-Htb.html#~parsePusherEvent">parsePusherEvent</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Send.html">Send</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Seven.html">Seven</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~ignoreMember">ignoreMember</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~importDbBackup">importDbBackup</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~isAdmin">isAdmin</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~isCaptain">isCaptain</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~sendHelpMsg">sendHelpMsg</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~understand">understand</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~unignoreMember">unignoreMember</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~updateCache">updateCache</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-ZipTools.html">ZipTools</a></span></li><li class="nav-heading"><a href="global.html">Globals</a></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#DEFAULT_SAMPLES">DEFAULT_SAMPLES</a></span></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#SMOKE_TAG_RX">SMOKE_TAG_RX</a></span></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#TERM_ALIASES">TERM_ALIASES</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#buildHelpPromptCatalog">buildHelpPromptCatalog</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#buildMemberActivityChart">buildMemberActivityChart</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#buildMemberProgressChart">buildMemberProgressChart</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#buildRunnablePrompts">buildRunnablePrompts</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#chartB64ToBuffer">chartB64ToBuffer</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#classifySmokePrompt">classifySmokePrompt</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#createSmokeContext">createSmokeContext</a></span></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#dialogflow">dialogflow</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#dispatchSmokeIntent">dispatchSmokeIntent</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#extractPromptsFromHelpLine">extractPromptsFromHelpLine</a></span></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#fs">fs</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#normalizeChartTerm">normalizeChartTerm</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#normalizeEntityField">normalizeEntityField</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#resolveSmokeIntent">resolveSmokeIntent</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#runSmokePrompt">runSmokePrompt</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#smokeTaggedPrompt">smokeTaggedPrompt</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#splitHelpAlternatives">splitHelpAlternatives</a></span></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#strings">strings</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#substitutePlaceholders">substitutePlaceholders</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#syncAgentDownstream">syncAgentDownstream</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#syncAgentUpstream">syncAgentUpstream</a></span></li>
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">helpers/pusher-htb.js</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * Implements functionality for parsing and responding to Pusher events from the public HTB Shoutbox.
+ @module Pusher-Htb
+*/
+const { JSDOM } = require("jsdom")
+const EventEmitter = require("events")
+const Pusher = require("pusher-client")
+const { Helpers: H } = require("../helpers/helpers.js")
+const { HTB_APP_BASE } = require("../config/htb.js")
+const { createLogger } = require("../helpers/logger.js")
+const TD = require("turndown")
+
+const log = createLogger("pusher-htb")
+
+const pusherWarn = Pusher.warn.bind(Pusher)
+Pusher.warn = function (...args) {
+	const err = args[1]
+	const message = String(err?.error || err?.message || "")
+	if (err?.type === "WebSocketError" &amp;&amp; (message.includes("close code 1000") || message.includes("CLOSE_NORMAL"))) {
+		log.debug("Pusher websocket closed normally, reconnecting")
+		return
+	}
+	pusherWarn(...args)
+}
+
+function cleanAttribute (attribute) {
+	return attribute ? attribute.replace(/(\n+\s*)+/g, "\n") : ""
+}
+
+const td = new TD().addRule("boldlink", {
+	filter: function (node, options) {
+		return (
+			options.linkStyle === "inlined" &amp;&amp;
+      node.nodeName === "A" &amp;&amp;
+      node.getAttribute("href")
+		)
+	},
+
+	replacement: function (content, node) {
+		var href = node.getAttribute("href")
+		var title = cleanAttribute(node.getAttribute("title"))
+		if (title) title = " \"" + title + "\""
+		return "**[" + content + "](" + href + title + ")**"
+	}
+})
+
+/**
+ * Handles a single Pusher achievement message, sending it to our announcement channel as a pretty embed if it concerns our team.
+ * @param {Object} data - Contains the Pusher event data.
+ * @param {Discord.Channel} channel - The Discord channel to send the announcement to, if one is configured.
+ * @returns {string} - Debug description of the event / achievement.
+ */
+
+function parsePusherEvent(data, source={}) {
+	var md = null
+	try {
+		switch (data["channel"]) {
+		case "owns-channel": case "infobox-channel": case null:
+		{
+			let dom = (new JSDOM(data.text))
+			let msg = dom.window.document.body
+			Array.from(msg.getElementsByTagName("a")).forEach(element => {
+				element.href = encodeURI(element.href)
+			})
+			// console.log(msg)
+			// console.log(msg.querySelector("a"))
+			let links = Array.from(msg.getElementsByTagName("a"))
+			links.forEach(element => {
+				element.href = encodeURI(element.href)
+			})
+			let machine = (H.sAcc(links.find(e => e.href.includes("machine")), "textContent") || "").trim()
+			let challenge = (H.sAcc(links.find(e => e.href.includes("challenge")), "textContent") || "").trim()
+			// console.log(Array.from(links))
+			let nodes = Array.from((msg.lastChild.textContent == "[Tweet]" ? Array.from(msg.childNodes).slice(0, -1) : msg.childNodes))        // MD: Eliminate the "[Tweet]" link
+			let texts = nodes.map(node => node.outerHTML || node.textContent) // MD: Get HTML from each remaining node
+			md = td.turndown(texts.join(""))            // MD: Recombine HTML and convert to Markdown
+			let uid = (links.length ? (~~links[0].href.match(/profile\/(\d+)/)?.[1] || null): null)
+			var isBlood = Array.from(msg.querySelectorAll("span.text-danger")).some(e => e.textContent.includes("1st blood"))
+			var isLaunch = msg.textContent.includes("mass-powering")
+			var launchName
+			if (isLaunch) {
+				launchName = H.sAcc(nodes,0,"firstChild","data")
+			}
+			let type = machine ? "machine" : challenge ? "challenge" : isLaunch ? "launch" : null 
+			let flag = undefined
+			let target = machine || challenge || launchName
+
+			let lemmas = msg.childNodes[1].textContent.trim().split(" ")
+			let verb = lemmas[0]
+			if (verb == "solved") {
+			// This is a challenge own.
+			} else if (isBlood) {
+			// This is a blood.
+				flag = ["root", "system"].includes(msg.childNodes[3].textContent.trim().split(" ")[1]) ? "root" : "user"
+			} else if (machine) {
+			// This is (probably) a box own.
+				flag = lemmas[1]
+				flag = flag == "system" ? "root" : flag
+			}
+			return new HtbPusherEvent(source.channel || data.channel, source.event, data, uid, type, target, flag, md, isBlood, data.text)}	
+		default:
+		{
+			// console.log("Uncategorized / Other Channel:", data)
+			let dom = (new JSDOM(data.text))
+			let msg = dom.window.document.body
+			Array.from(msg.getElementsByTagName("a")).forEach(element => {
+				element.href = encodeURI(element.href)
+			})
+			// console.log(msg)
+			// console.log(msg.querySelector("a"))
+			let links = Array.from(msg.getElementsByTagName("a"))
+			links.forEach(element => {
+				element.href = encodeURI(element.href)
+				// console.log(element, element.href)
+			})
+			// console.log(Array.from(links))
+			let nodes = Array.from((msg.lastChild.textContent == "[Tweet]" ? Array.from(msg.childNodes).slice(0, -1) : msg.childNodes))        // MD: Eliminate the "[Tweet]" link
+			let texts = nodes.map(node => node.outerHTML || node.textContent) // MD: Get HTML from each remaining node
+			md = td.turndown(texts.join(""))            // MD: Recombine HTML and convert to Markdown
+			return new HtbPusherEvent(source.channel || data.channel, source.event, data, undefined, undefined, undefined, undefined, md, isBlood, data.text)}
+		}
+	} catch (error) {
+		console.warn(`Error encountered for the following incoming Pusher message (CHAN: ${source.channel} | EVT: ${source.event}):`,)
+		console.error(JSON.stringify(data,null,"\t"))
+		console.error(error)
+		return new HtbPusherEvent(source.channel || data.channel, source.event, data, undefined, undefined, undefined, undefined, md, null, data.text)
+	}
+
+}
+
+class HtbPusherEvent {
+	/**
+ 	* 	An object containing data parsed from a HTB Pusher event. Contains structured information about the specific achievement, target and users involved, as well as the original text for debugging.
+	* @param {string} channel - The channel name associated with the Pusher event.
+	* @param {boolean} event - The event name associated with the Pusher event.
+	* @param {Object} data  - The original JSON data from Pusher.
+	* @param {number} uid  - The Htb UID of the user involved.
+	* @param {string} type - The type of message this was, e.g. a challenge own, fortress milestone, machine rating etc.
+	* @param {string} target - The string name of the target (thing that was owned), if relevant.
+	* @param {string} flag - The string name of the flag / milestone, if a pro lab or other necessitating challenge.
+	* @param {string} markdown - The bare markdown representation of the original HTML announcement string.
+	* @param {boolean} blood - Whether this is a blood or not.
+	* @param {string} debug - The raw HTML string passed in the Pusher event.
+   */
+	constructor(channel, event, data, uid, type, target, flag, markdown, blood=false, debug) {
+		this.data = data
+		this.uid = uid
+		this.time = new Date().getTime()
+		this.type = type
+		this.target = target
+		this.flag = flag
+		this.markdown = markdown
+		this.debug = debug
+		this.channel = channel
+		this.blood = blood
+		this.event = event
+	}
+}
+
+
+
+/** Class representing a HTB Pusher Subscription.
+ * 
+ * @typedef HtbPusherSubscription
+ * @property {number} client - The Pusher Client instance.
+ * @property {string} channel - The channel being listened on.
+ */
+class HtbPusherSubscription extends EventEmitter {
+	/**
+   * Creates a new HtbPusherSubscription object.
+   * @param {string} apiToken - The Pusher Client instance.
+   * @param {Object} bindings - An array of channel:event pair objects to subscribe to.
+   * @param {string} bearerToken - HTB v4 app token used for Pusher channel auth.
+   * @returns {HtbPusherSubscription}
+   */
+
+	// new HtbPusherSubscription('97608bf7532e6f0fe898', 'owns-channel', 'display-info', token)
+	//'97608bf7532e6f0fe898' (Htb pusher api token)
+	constructor(apiToken, bindings, bearerToken) {
+		super()
+		this.bearerToken = bearerToken
+		this.client = new Pusher(apiToken, {
+			authEndpoint: `${HTB_APP_BASE}/pusher/auth`,
+			auth: { Authorization: "Bearer " + bearerToken },
+			authTransport: "ajax",
+			cluster: "eu",
+			encrypted: true
+		})
+		this.channels = []
+		for (let i = 0; i &lt; bindings.length; i++) {
+			const binding = bindings[i]
+			var channel = this.client.subscribe(binding.channel)
+			channel.bind(binding.event,
+				(data) => {
+					try {
+						// console.log(data)
+						this.alertSeven(parsePusherEvent(data, {channel:binding.channel, event: binding.event})) // Pass the parsed message back for processing
+					} catch (error) {
+						console.error(error)
+					}
+				}
+			)
+			this.channels.push(channel)
+		}
+		
+		log.info("Pusher client initialized", { authEndpoint: `${HTB_APP_BASE}/pusher/auth` })
+		this.client.connection.bind("state_change", function (states) {
+			log.info(`Client state changed from ${states.previous} to ${states.current}`)
+		})
+	}
+
+	/**
+   * 
+   * @param {HtbPusherEvent} message 
+   */
+	alertSeven(message) {
+		if (message) {
+			log.debug("Pusher event received", { uid: message.uid, type: message.type, target: message.target, channel: message.channel })
+			this.emit("pusherevent", message)
+		}
+	}
+
+	/**
+   * Updates the Bearer-token based authentication for the Pusher Client.
+   * @param {string} bearerToken - HTB v4 app token.
+   */
+	set auth(bearerToken) {
+		try {
+			this.bearerToken = bearerToken
+			this.client.config.auth.Authorization = "Bearer " + bearerToken
+		} catch (error) {
+			console.error(error)
+		}
+	}
+}
+
+module.exports = {
+	HtbPusherEvent: HtbPusherEvent,
+	HtbPusherSubscription: HtbPusherSubscription,
+	parsePusherEvent: parsePusherEvent
+}</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<br class="clear">
+
+<footer>
+    Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Mon Jun 08 2026 16:20:21 GMT+0200 (heure d’été d’Europe centrale) using the Minami theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/linenumber.js"></script>
+</body>
+</html>

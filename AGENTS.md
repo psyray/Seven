@@ -2,6 +2,17 @@
 
 Discord bot for Hack The Box teams. Node.js + DialogFlow + PostgreSQL.
 
+## Documentation
+
+| Audience | Start here |
+|----------|------------|
+| Discord users | [docs/user/README.md](docs/user/README.md) |
+| Server admins | [docs/admin/setup.md](docs/admin/setup.md) |
+| Contributors | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| API reference | [docs/api/index.html](docs/api/index.html) |
+
+Full index: [docs/README.md](docs/README.md)
+
 ## Architecture
 
 ```
@@ -84,10 +95,10 @@ Use `createLogger("module-name")` from `helpers/logger.js`. Logs go to console +
 
 - `admin.forceUpdateData` → smart team sync (`force: true`)
 - `admin.clearCached` → wipe memory + full refresh (`full: true`)
-- `getTeamInfo`, `getMemberRank`, `getTargetInfo`, … → see `bot.js` switch
+- `getTeamInfo`, `getMemberRank`, `getTargetInfo`, … → see `bot.js` switch and [docs/developer/intents.md](docs/developer/intents.md)
 
 ## References
 
 - [Unofficial HTB API (Gubarz)](https://github.com/Gubarz/unofficial-htb-api) — machine list v5 endpoints
 - [HTB API (D3vil0p3r)](https://github.com/D3vil0p3r/HackTheBox-API) — v4 endpoint reference
-- [Seven Docs](https://propolisa.github.io/Seven/index.html) — legacy JSDoc
+- [docs/developer/htb-api.md](docs/developer/htb-api.md) — Seven HTB integration reference

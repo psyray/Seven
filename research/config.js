@@ -1,1 +1,11 @@
-{ "tags": { "allowUnknownTags": true, "dictionaries": ["jsdoc"] }, "source": { "include": ["lib", "package.json", "README.md"], "includePattern": ".js$", "excludePattern": "(node_modules/|docs)" }, "plugins": ["plugins/markdown"], "templates": { "cleverLinks": false, "monospaceLinks": true }, "opts": { "destination": "./docs", "encoding": "utf8", "private": true, "recurse": true, "template": "./node_modules/minami" } }
+# JSDoc configuration moved to repository root
+
+Use `jsdoc.config.json` at the project root.
+
+Generate API docs:
+
+```bash
+npm run doc:generate
+```
+
+Output: `docs/api/index.html`

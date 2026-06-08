@@ -1,0 +1,24 @@
+{
+  "tags": {
+    "allowUnknownTags": true
+  },
+  "source": {
+    "include": [
+      "bot.js",
+      "models/",
+      "modules/",
+      "helpers/",
+      "views/",
+      "config/"
+    ],
+    "includePattern": ".js$",
+    "excludePattern": "(node_modules/|docs/|scripts/|fixtures/)"
+  },
+  "plugins": ["plugins/markdown"],
+  "opts": {
+    "destination": "./docs/api",
+    "encoding": "utf8",
+    "recurse": true,
+    "template": "./node_modules/minami"
+  }
+}

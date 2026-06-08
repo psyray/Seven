@@ -1,8 +1,8 @@
 {
   "name": "seven-server",
   "description": "Seven's Node.js app, packaged for Heroku",
-  "repository": "https://github.com/Propolisa/Seven",
-  "logo": "https://raw.githubusercontent.com/Propolisa/Seven/master/branding/seven_thumb_256.png",
+  "repository": "https://github.com/psyray/Seven",
+  "logo": "https://raw.githubusercontent.com/psyray/Seven/master/branding/seven_thumb_256.png",
 	"keywords": ["node", "hackthebox", "discord.js"],
 	"addons": [
     {

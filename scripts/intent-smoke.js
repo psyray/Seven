@@ -52,6 +52,16 @@ function testLocalIntentRegressions() {
 			prompt: "hardest machines",
 			expect: { intent: "filterTargets", sortby: "hardest" },
 		},
+		{
+			prompt: "tiens tiens, qui est le numéro 1 de la team?",
+			df: { intent: { displayName: "Default Fallback Intent" } },
+			params: {},
+			expect: { intent: "getTeamLeader" },
+		},
+		{
+			prompt: "who is number 1 on the team",
+			expect: { intent: "getTeamLeader" },
+		},
 	]
 
 	for (const c of cases) {

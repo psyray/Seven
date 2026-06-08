@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>helpers/nlp.js - Documentation</title>
+
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="https://code.ionicframework.com/ionicons/2.0.1/css/ionicons.min.css">
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav>
+    <li class="nav-link nav-home-link"><a href="index.html">Home</a></li><li class="nav-heading">Classes</li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="Format.html">Format</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.andifyList">andifyList</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.challengeCategoryNameToIconFile">challengeCategoryNameToIconFile</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.convertProLabDescription">convertProLabDescription</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.elapsedDays">elapsedDays</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.fuzzyAge">fuzzyAge</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.getFlag">getFlag</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.halfMoon">halfMoon</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.mdItemizeList">mdItemizeList</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.nth">nth</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.numS">numS</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.osNameToIconFile">osNameToIconFile</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.randomDominoes">randomDominoes</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.ratingString">ratingString</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.timeSince">timeSince</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.timeSinceSmall">timeSinceSmall</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="HTBEmoji.html">HTBEmoji</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Challenge.html">Challenge</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Endgame.html">Endgame</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-EndgameEntry.html">EndgameEntry</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-EndgameProfile.html">EndgameProfile</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Fortress.html">Fortress</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-FortressEntry.html">FortressEntry</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-FortressProfile.html">FortressProfile</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Machine.html">Machine</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-ProLab.html">ProLab</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-ProLabEntry.html">ProLabEntry</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-ProLabInfo.html">ProLabInfo</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-ProLabOverview.html">ProLabOverview</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Team.html">Team</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Track.html">Track</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-University.html">University</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-User.html">User</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Classes-HtbFeedbackForChart.html">HtbFeedbackForChart</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Classes.html#~HtbMaker">HtbMaker</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Classes-HtbSpecialFlag.html">HtbSpecialFlag</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-HtbEmbeds-HtbEmbeds.html">HtbEmbeds</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-HtbEmbeds-HtbEmbeds.html#embedSubdivide">embedSubdivide</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-HtbEmbeds-HtbEmbeds.html#pusherOwn">pusherOwn</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Pusher-Htb-HtbPusherEvent.html">HtbPusherEvent</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Pusher-Htb.html#~HtbPusherSubscription">HtbPusherSubscription</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Pusher-Htb.html#~HtbPusherSubscription#alertSeven">alertSeven</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Send-Send.html">Send</a></span></li><li class="nav-heading">Modules</li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-ApiClasses.html">ApiClasses</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Classes.html">Classes</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Helpers.html">Helpers</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Helpers.html#~asyncForEach">asyncForEach</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Helpers.html#~wait">wait</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-HerokuDualstackProxy.html">HerokuDualstackProxy</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-HtbEmbeds.html">HtbEmbeds</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Nlp.html">Nlp</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Nlp.html#~checkSelfName">checkSelfName</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Nlp.html#~extractTargetNameFromMessage">extractTargetNameFromMessage</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Nlp.html#~resolveLocalIntent">resolveLocalIntent</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Pusher-Htb.html">Pusher-Htb</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Pusher-Htb.html#~parsePusherEvent">parsePusherEvent</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Send.html">Send</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Seven.html">Seven</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~ignoreMember">ignoreMember</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~importDbBackup">importDbBackup</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~isAdmin">isAdmin</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~isCaptain">isCaptain</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~sendHelpMsg">sendHelpMsg</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~understand">understand</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~unignoreMember">unignoreMember</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~updateCache">updateCache</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-ZipTools.html">ZipTools</a></span></li><li class="nav-heading"><a href="global.html">Globals</a></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#DEFAULT_SAMPLES">DEFAULT_SAMPLES</a></span></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#SMOKE_TAG_RX">SMOKE_TAG_RX</a></span></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#TERM_ALIASES">TERM_ALIASES</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#buildHelpPromptCatalog">buildHelpPromptCatalog</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#buildMemberActivityChart">buildMemberActivityChart</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#buildMemberProgressChart">buildMemberProgressChart</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#buildRunnablePrompts">buildRunnablePrompts</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#chartB64ToBuffer">chartB64ToBuffer</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#classifySmokePrompt">classifySmokePrompt</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#createSmokeContext">createSmokeContext</a></span></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#dialogflow">dialogflow</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#dispatchSmokeIntent">dispatchSmokeIntent</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#extractPromptsFromHelpLine">extractPromptsFromHelpLine</a></span></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#fs">fs</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#normalizeChartTerm">normalizeChartTerm</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#normalizeEntityField">normalizeEntityField</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#resolveSmokeIntent">resolveSmokeIntent</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#runSmokePrompt">runSmokePrompt</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#smokeTaggedPrompt">smokeTaggedPrompt</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#splitHelpAlternatives">splitHelpAlternatives</a></span></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#strings">strings</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#substitutePlaceholders">substitutePlaceholders</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#syncAgentDownstream">syncAgentDownstream</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#syncAgentUpstream">syncAgentUpstream</a></span></li>
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">helpers/nlp.js</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * Contains Natural Language Processing functionality to make Seven a little smarter! 😸
+ @module Nlp
+*/
+
+const FILLER_WORDS = new Set([
+	"box", "boxes", "machine", "machines", "challenge", "challenges",
+	"info", "information", "details", "about", "the", "a", "an",
+	"fortress", "endgame", "prolab", "pro", "lab", "htb", "hackthebox",
+	"tell", "me", "show", "give", "what", "is", "who", "whats", "what's",
+	"on", "for", "of", "please", "can", "you", "i", "want", "need",
+])
+
+const TARGET_TYPE_ALIASES = {
+	box: "machine",
+	boxes: "machine",
+	machine: "machine",
+	machines: "machine",
+	challenge: "challenge",
+	challenges: "challenge",
+}
+
+const SORT_ALIASES = {
+	newest: "newest",
+	latest: "newest",
+	fresh: "newest",
+	oldest: "oldest",
+	hardest: "hardest",
+	hard: "hardest",
+	easiest: "easiest",
+	easy: "easiest",
+	"best rated": "best rated",
+	"worst rated": "worst rated",
+}
+
+/**
+ * Check whether the NLP-recognized 'name' is actually a self descriptor.
+ * @param {string} name - The recognized 'name'.
+ * @returns {boolean}
+ */
+function checkSelfName(name) {
+	return ((["i", "me", "my", "mine", "i'm", "i've", "myself"].includes(name.toString().toLowerCase())) ? true : false)
+}
+
+/**
+ * Strip conversational filler words and return a likely HTB entity name.
+ * @param {string} content
+ * @param {string|null} [targetType]
+ * @returns {string}
+ */
+function extractTargetNameFromMessage(content, targetType = null) {
+	if (!content) return ""
+	const typeHints = targetType === "machine"
+		? ["box", "boxes", "machine", "machines"]
+		: targetType === "challenge"
+			? ["challenge", "challenges"]
+			: []
+
+	const tokens = content.toLowerCase()
+		.replace(/[^\w\s'-]/g, " ")
+		.split(/\s+/)
+		.filter(t => t &amp;&amp; !FILLER_WORDS.has(t) &amp;&amp; !typeHints.includes(t))
+
+	return tokens.join(" ").trim()
+}
+
+/**
+ * Resolve a local intent when DialogFlow misses or returns incomplete parameters.
+ * @param {string} content - Raw user message (after "seven" prefix removal).
+ * @param {{ intent?: { displayName?: string } }|null} [dfResult]
+ * @param {object} [decodedParams] - DialogFlow parameters after struct.decode()
+ * @returns {{ intent: string, parameters: object, allRequiredParamsPresent: true }|null}
+ */
+function resolveLocalIntent(content, dfResult = null, decodedParams = null) {
+	if (!content) return null
+	const text = content.trim()
+	const lower = text.toLowerCase()
+
+	const dfIntent = dfResult?.intent?.displayName
+	const dfParams = decodedParams || {}
+
+	if (dfIntent === "getTargetInfo" &amp;&amp; dfParams.targetType &amp;&amp; !dfParams.targetName) {
+		const targetName = extractTargetNameFromMessage(text, dfParams.targetType)
+		if (targetName) {
+			return {
+				intent: "getTargetInfo",
+				parameters: { targetType: dfParams.targetType, targetName },
+				allRequiredParamsPresent: true,
+			}
+		}
+	}
+
+	const targetInfoMatch = lower.match(
+		/^(?:box|machine|challenge)\s+(.+?)\s+(?:info|details|information)\s*$/
+	)
+	if (targetInfoMatch) {
+		const typeWord = lower.split(/\s+/)[0]
+		return {
+			intent: "getTargetInfo",
+			parameters: {
+				targetType: TARGET_TYPE_ALIASES[typeWord] || "machine",
+				targetName: targetInfoMatch[1].trim(),
+			},
+			allRequiredParamsPresent: true,
+		}
+	}
+
+	const memberInfoMatch = lower.match(/^(.+?)\s+(?:info|details|information|profile)\s*$/)
+	if (memberInfoMatch &amp;&amp; !memberInfoMatch[1].includes(" ")) {
+		const username = memberInfoMatch[1].trim()
+		if (!checkSelfName(username) &amp;&amp; !FILLER_WORDS.has(username)) {
+			return {
+				intent: "getMemberInfo",
+				parameters: { username },
+				allRequiredParamsPresent: true,
+			}
+		}
+	}
+
+	const filterMatch = lower.match(
+		/^(?:give me |show me |list |get )?(?:the )?(?:(\d+)\s+)?(newest|latest|fresh|oldest|hardest|hard|easiest|easy|best rated|worst rated)\s+(?:(\d+)\s+)?(boxes|box|machines|machine|challenges|challenge)\s*$/
+	)
+	if (filterMatch) {
+		const limit = Number(filterMatch[1] || filterMatch[3] || 15)
+		const sortKey = SORT_ALIASES[filterMatch[2]] || "newest"
+		const targetType = TARGET_TYPE_ALIASES[filterMatch[4].replace(/s$/, "")] || "machine"
+		return {
+			intent: "filterTargets",
+			parameters: {
+				targettype: targetType,
+				sortby: [sortKey],
+				sortorder: sortKey === "oldest" ? "asc" : "desc",
+				limit,
+				memberName: [],
+				targetFilterBasis: [],
+			},
+			allRequiredParamsPresent: true,
+		}
+	}
+
+	const compactFilterMatch = lower.match(
+		/^(?:(\d+)\s+)?(newest|latest|oldest|hardest|easiest)\s+(boxes|machines|challenges)\s*$/
+	)
+	if (compactFilterMatch) {
+		const limit = Number(compactFilterMatch[1] || 15)
+		const sortKey = SORT_ALIASES[compactFilterMatch[2]] || "newest"
+		const targetType = TARGET_TYPE_ALIASES[compactFilterMatch[3].replace(/s$/, "")] || "machine"
+		return {
+			intent: "filterTargets",
+			parameters: {
+				targettype: targetType,
+				sortby: [sortKey],
+				sortorder: sortKey === "oldest" ? "asc" : "desc",
+				limit,
+				memberName: [],
+				targetFilterBasis: [],
+			},
+			allRequiredParamsPresent: true,
+		}
+	}
+
+	const teamLeaderPhrases = [
+		/who(?:'s| is)\s+(?:the\s+)?(?:number\s*|#\s*|no\.?\s*)?1(?:\s+(?:on|of|in)\s+(?:the\s+)?team)?/,
+		/who(?:'s| is)\s+on\s+top/,
+		/qui\s+est\s+(?:le\s+)?(?:num[eé]ro|n°|#)\s*1/,
+		/(?:num[eé]ro|n°|#)\s*1\s+(?:de\s+la\s+)?(?:team|équipe)/,
+	]
+	if (teamLeaderPhrases.some(rx => rx.test(lower))) {
+		return {
+			intent: "getTeamLeader",
+			parameters: {},
+			allRequiredParamsPresent: true,
+		}
+	}
+
+	if (dfIntent === "Default Fallback Intent" || !dfIntent) {
+		const newestBoxPhrases = [
+			/^what(?:'s| is)\s+new\??$/,
+			/^what(?:'s| is)\s+fresh\??$/,
+			/^newest\s+box\??$/,
+		]
+		if (newestBoxPhrases.some(rx => rx.test(lower))) {
+			return {
+				intent: "getNewBox",
+				parameters: {},
+				allRequiredParamsPresent: true,
+			}
+		}
+	}
+
+	return null
+}
+
+module.exports = {
+	checkSelfName,
+	extractTargetNameFromMessage,
+	resolveLocalIntent,
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<br class="clear">
+
+<footer>
+    Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Mon Jun 08 2026 16:20:21 GMT+0200 (heure d’été d’Europe centrale) using the Minami theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/linenumber.js"></script>
+</body>
+</html>

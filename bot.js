@@ -444,7 +444,7 @@ async function main() {
 			SEND.messagePrimaryDiscordAdmin("Hey there! 👋", "The name's Seven, nice to be of service. 🍉\n" +
 			"Try using 'man seven' to see what I can help you and the team with!\n" +
 			"\nNeed help with something? Feel free to reach out on my [Discord channel](https://discord.gg/f3v4YuU3rr) " + 
-			"or [GitHub repo](https://github.com/Propolisa/Seven) via an issue!" 
+			"or [GitHub repo](https://github.com/psyray/Seven) via an issue!" 
 			)
 		}
 		setInterval(() => updateDiscordIds(client, process.env.DISCORD_GUILD_ID.toString()), 30 * 60 * 1000)   // UPDATE DISCORD LINKS EVERY 30 MINUTES

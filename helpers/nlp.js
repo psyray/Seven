@@ -159,6 +159,20 @@ function resolveLocalIntent(content, dfResult = null, decodedParams = null) {
 		}
 	}
 
+	const teamLeaderPhrases = [
+		/who(?:'s| is)\s+(?:the\s+)?(?:number\s*|#\s*|no\.?\s*)?1(?:\s+(?:on|of|in)\s+(?:the\s+)?team)?/,
+		/who(?:'s| is)\s+on\s+top/,
+		/qui\s+est\s+(?:le\s+)?(?:num[eé]ro|n°|#)\s*1/,
+		/(?:num[eé]ro|n°|#)\s*1\s+(?:de\s+la\s+)?(?:team|équipe)/,
+	]
+	if (teamLeaderPhrases.some(rx => rx.test(lower))) {
+		return {
+			intent: "getTeamLeader",
+			parameters: {},
+			allRequiredParamsPresent: true,
+		}
+	}
+
 	if (dfIntent === "Default Fallback Intent" || !dfIntent) {
 		const newestBoxPhrases = [
 			/^what(?:'s| is)\s+new\??$/,

@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>helpers/dflow.js - Documentation</title>
+
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="https://code.ionicframework.com/ionicons/2.0.1/css/ionicons.min.css">
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav>
+    <li class="nav-link nav-home-link"><a href="index.html">Home</a></li><li class="nav-heading">Classes</li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="Format.html">Format</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.andifyList">andifyList</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.challengeCategoryNameToIconFile">challengeCategoryNameToIconFile</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.convertProLabDescription">convertProLabDescription</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.elapsedDays">elapsedDays</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.fuzzyAge">fuzzyAge</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.getFlag">getFlag</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.halfMoon">halfMoon</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.mdItemizeList">mdItemizeList</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.nth">nth</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.numS">numS</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.osNameToIconFile">osNameToIconFile</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.randomDominoes">randomDominoes</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.ratingString">ratingString</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.timeSince">timeSince</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="Format.html#.timeSinceSmall">timeSinceSmall</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="HTBEmoji.html">HTBEmoji</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Challenge.html">Challenge</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Endgame.html">Endgame</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-EndgameEntry.html">EndgameEntry</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-EndgameProfile.html">EndgameProfile</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Fortress.html">Fortress</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-FortressEntry.html">FortressEntry</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-FortressProfile.html">FortressProfile</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Machine.html">Machine</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-ProLab.html">ProLab</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-ProLabEntry.html">ProLabEntry</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-ProLabInfo.html">ProLabInfo</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-ProLabOverview.html">ProLabOverview</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Team.html">Team</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-Track.html">Track</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-University.html">University</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-ApiClasses-User.html">User</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Classes-HtbFeedbackForChart.html">HtbFeedbackForChart</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Classes.html#~HtbMaker">HtbMaker</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Classes-HtbSpecialFlag.html">HtbSpecialFlag</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-HtbEmbeds-HtbEmbeds.html">HtbEmbeds</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-HtbEmbeds-HtbEmbeds.html#embedSubdivide">embedSubdivide</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-HtbEmbeds-HtbEmbeds.html#pusherOwn">pusherOwn</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Pusher-Htb-HtbPusherEvent.html">HtbPusherEvent</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Pusher-Htb.html#~HtbPusherSubscription">HtbPusherSubscription</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Pusher-Htb.html#~HtbPusherSubscription#alertSeven">alertSeven</a></span></li><li class="nav-heading"><span class="nav-item-type type-class">C</span><span class="nav-item-name"><a href="module-Send-Send.html">Send</a></span></li><li class="nav-heading">Modules</li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-ApiClasses.html">ApiClasses</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Classes.html">Classes</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Helpers.html">Helpers</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Helpers.html#~asyncForEach">asyncForEach</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Helpers.html#~wait">wait</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-HerokuDualstackProxy.html">HerokuDualstackProxy</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-HtbEmbeds.html">HtbEmbeds</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Nlp.html">Nlp</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Nlp.html#~checkSelfName">checkSelfName</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Nlp.html#~extractTargetNameFromMessage">extractTargetNameFromMessage</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Nlp.html#~resolveLocalIntent">resolveLocalIntent</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Pusher-Htb.html">Pusher-Htb</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Pusher-Htb.html#~parsePusherEvent">parsePusherEvent</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Send.html">Send</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-Seven.html">Seven</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~ignoreMember">ignoreMember</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~importDbBackup">importDbBackup</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~isAdmin">isAdmin</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~isCaptain">isCaptain</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~sendHelpMsg">sendHelpMsg</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~understand">understand</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~unignoreMember">unignoreMember</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="module-Seven.html#~updateCache">updateCache</a></span></li><li class="nav-heading"><span class="nav-item-type type-module">M</span><span class="nav-item-name"><a href="module-ZipTools.html">ZipTools</a></span></li><li class="nav-heading"><a href="global.html">Globals</a></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#DEFAULT_SAMPLES">DEFAULT_SAMPLES</a></span></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#SMOKE_TAG_RX">SMOKE_TAG_RX</a></span></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#TERM_ALIASES">TERM_ALIASES</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#buildHelpPromptCatalog">buildHelpPromptCatalog</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#buildMemberActivityChart">buildMemberActivityChart</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#buildMemberProgressChart">buildMemberProgressChart</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#buildRunnablePrompts">buildRunnablePrompts</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#chartB64ToBuffer">chartB64ToBuffer</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#classifySmokePrompt">classifySmokePrompt</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#createSmokeContext">createSmokeContext</a></span></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#dialogflow">dialogflow</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#dispatchSmokeIntent">dispatchSmokeIntent</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#extractPromptsFromHelpLine">extractPromptsFromHelpLine</a></span></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#fs">fs</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#normalizeChartTerm">normalizeChartTerm</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#normalizeEntityField">normalizeEntityField</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#resolveSmokeIntent">resolveSmokeIntent</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#runSmokePrompt">runSmokePrompt</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#smokeTaggedPrompt">smokeTaggedPrompt</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#splitHelpAlternatives">splitHelpAlternatives</a></span></li><li class="nav-item"><span class="nav-item-type type-member">M</span><span class="nav-item-name"><a href="global.html#strings">strings</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#substitutePlaceholders">substitutePlaceholders</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#syncAgentDownstream">syncAgentDownstream</a></span></li><li class="nav-item"><span class="nav-item-type type-function">F</span><span class="nav-item-name"><a href="global.html#syncAgentUpstream">syncAgentUpstream</a></span></li>
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">helpers/dflow.js</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>const LH = "DialogFlow:::"
+const fs = require("fs").promises
+const ZIP = require("adm-zip")
+const zTools = require("../helpers/zip-tools")
+
+
+/**
+ * Loads Google's DialogFlow client library which we will use to make API calls.
+ * */
+ 
+const dialogflow = require("@google-cloud/dialogflow").v2beta1
+const { agent } = require("superagent")
+const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS || "{}")
+const entitiesClient = new dialogflow.EntityTypesClient({
+	credentials: credentials,
+})
+
+const agentsClient = new dialogflow.AgentsClient({
+	credentials: credentials, 
+})
+
+// Set project name hard coded due to this bug
+// https://github.com/googleapis/nodejs-automl/issues/107#issuecomment-668295771
+const projectId = 'seven-htb-bot-cnsn'
+const agentPath = entitiesClient.projectAgentPath(projectId)
+
+
+function checkAgentExists(){
+	return agentsClient.getAgent({parent:`projects/${projectId}/locations/global`})
+		.then(res => {
+			if (res.find(e => e.parent == `projects/${projectId}`)) {
+				// console.log("Agent exists!")
+				return true
+			} else {
+				console.log("Agent not found.")
+				return false
+			}
+		})
+		.catch(err => {
+			console.error((err.code == 5? "ERROR: Agent was not found (does not exist yet)." : err))
+			return false
+		})
+}
+
+function agentIsEmpty(){
+	return entitiesClient
+		.listEntityTypes({parent: agentPath})
+		.then((responses) => {
+			const entities = responses[0]
+			// If there are some entities, this isn't an an empty (unconfigured) agent
+			if (entities.length) {return false}
+			// No entities found, so probably an empty (unconfigured) agent.
+			return true
+		})
+}
+// Import the Seven agent. See: https://googleapis.dev/nodejs/dialogflow/latest/v2beta1.AgentsClient.html#importAgent
+function importAgentZip(sourcePath){
+	return fs.readFile(sourcePath || "static/dflow/agent-latest.zip")
+		.then(res => agentsClient.restoreAgent({parent:`projects/${projectId}`,agentContent:res})
+			.then(() => {
+				console.log("[DFLOW AGENT SYNC]::: Agent was successfully pushed to Dialogflow from backup.\n"+
+										"                      NOTE: Agent training may take a minute or two. Please be patient...")
+			})
+		)
+}
+
+function unpackAndAnonymizeTeamData(buffer){
+	return new Promise((resolve, reject) => {
+		if (buffer) {
+			var zip = new ZIP(buffer)
+			var zipEntries = zip.getEntries()
+			var memberNameEntry = zipEntries.find(zipEntry => zipEntry.entryName == "entities/memberName_entries_en.json")
+			var origLength = 0
+			if (memberNameEntry) {
+				origLength = memberNameEntry.getData().toString("utf8").length
+				return fs.readFile("research/templates/memberName_entries_en.json")
+					.then(res => {
+						zip.updateFile(memberNameEntry, res)
+						zip.extractAllToAsync("./cache/agent-latest", true, function (e) {
+							console.warn(`[AGENT EXPORT]::: Team Member JSON entity patched: ${origLength}B --> ${memberNameEntry.getData().toString("utf8").length}B`)
+							resolve()
+						})
+					})
+			} else {
+				reject("[AGENT EXPORT]::: Incomplete agent detected. Discontinuing export...")
+			}
+		} else {reject("[AGENT EXPORT]::: No agent was found.")}
+	})
+}
+
+/**
+ * (DEV USE ONLY) Download the latest version of the Seven DialogFlow agent, stripping team-specific data from entities.
+ * Used only on master branch to keep the latest DFlow agent available on GitHub for third-party deployments.
+ */
+function syncAgentUpstream(){
+	return checkAgentExists().then(exists => {
+		if (exists) {
+			console.warn("[AGENT EXPORT]::: Agent download job started...")
+			return agentsClient.exportAgent({parent: `projects/${projectId}/locations/global`, agentUri: null})
+				.then(res => {
+					console.warn(`[AGENT EXPORT]::: Got agent data as bytes (${res[0].result.agentContent.length}).`)
+					return unpackAndAnonymizeTeamData(res[0].result.agentContent).then(r => {zTools.zipFolder("cache/agent-latest/","static/dflow/agent-latest.zip")})
+				})
+				.then(() => {
+					console.warn("[AGENT EXPORT]::: Agent zip file ('agent_latest.zip') being updated now.")
+				})
+				.catch(err => {
+					console.error(err)
+				})
+		} else {
+			console.error("No agent has been linked to this project. Please create one via DialogFlow web console.")
+		}
+	}).catch(err => console.warn("Agent didn't exist.", err))
+}
+
+/**
+ * (PRODUCTION USE) Ensures the agent project exists; if so, determines if it is only a skeleton (just-deployed) 
+ * and if so, pushes the latest pulled version to DialogFlow from the local backup / repo zip.
+ */
+function syncAgentDownstream(){
+	return checkAgentExists().then(exists => {
+		if (exists) {
+			console.warn("[DFLOW AGENT SYNC]::: Project exists and is linked to your provided key (awesome!).")
+			return agentIsEmpty().then(empty => {
+				console.warn(empty ? "[DFLOW AGENT SYNC]::: Agent is empty." : "[DFLOW AGENT SYNC]::: Agent is not empty. NO SYNC NEEDED...")
+				var ret = (empty ? importAgentZip("static/dflow/agent-latest.zip") : null)
+				return ret
+			})
+		} else {
+			console.error("[DFLOW AGENT SYNC]::: ERROR: No agent has been linked to this project. Please create one via DialogFlow web console.")
+		}
+	}).catch(err => console.warn(err))
+}
+
+
+function addSingleEntity(displayName, newFieldName){
+
+	class EntityNotFoundError extends Error {}
+
+	entitiesClient
+	// Tell client library to call Dialogflow with a request to
+	// list all EntityTypes.
+		.listEntityTypes({parent: agentPath})
+	// Go through all EntityTypes and find the one we wish to update
+	// (in this case, the EntityType named 'city').
+		.then((responses) => {
+			// The array of EntityTypes is the 0th element of the response.
+			const resources = responses[0]
+			// Loop through and find the EntityType we wish to update.
+			var existingEntity = resources.find(entity => entity.displayName === displayName)
+			if (existingEntity) {return existingEntity}
+			// If we couldn't find the expected entity, throw a custom error.
+			throw new EntityNotFoundError()
+		})
+	// Update the EntityType with a new list of Entities.
+		.then((entity) => {
+			//console.log(`Found ${displayName}: `, JSON.stringify(field));
+			var newField = {"value": newFieldName, "synonyms": [newFieldName]}
+			entity.entities.push(newField)
+
+			const request = {
+				entityType: entity,
+				// Tell the API to only modify the 'entities' field, not any other
+				// fields of the EntityType.
+				updateMask: {
+					paths: ["entities"],
+				},
+			}
+			// Tell Dialogflow to update the EntityType.
+			return entitiesClient.updateEntityType(request)
+		})
+	// Log the updated EntityType.
+		.then((responses) => {
+			//console.log('Updated entity type:', JSON.stringify(responses[0]));
+		})
+	// Catch any errors.
+		.catch((err) => {
+			// If this is the error we throw earlier in the chain, log the
+			// cause of the problem.
+			if (err instanceof EntityNotFoundError) {
+				console.error("Could not find the entity named " + displayName + ".")
+				return
+			}
+			console.error("Error updating entity type:", err)
+		})
+}
+
+/**
+ * 
+ * @param {Entity[]} fieldMap An array of EntityType objects (containing )
+ */
+function normalizeEntityField(field) {
+	if (typeof field === "string" &amp;&amp; field.length) {
+		return { value: field, synonyms: [field] }
+	}
+	if (field &amp;&amp; typeof field === "object" &amp;&amp; field.value) {
+		return {
+			value: field.value,
+			synonyms: Array.isArray(field.synonyms) &amp;&amp; field.synonyms.length
+				? field.synonyms
+				: [field.value],
+		}
+	}
+	return null
+}
+
+function updateEntity(fields, entityTypeName){
+	var needsUpdate = false
+	class EntityNotFoundError extends Error {}
+	
+	entitiesClient
+	// Tell client library to call Dialogflow with a request to
+	// list all EntityTypes.
+		.listEntityTypes({parent: agentPath})
+	// Go through all EntityTypes and find the one we wish to update
+	// (in this case, the EntityType named 'city').
+		.then((responses) => {
+			// The array of EntityTypes is the 0th element of the response.
+			const resources = responses[0]
+			// Loop through and find the EntityType we wish to update.
+			var existingEntityType = resources.find(entity => entity.displayName === entityTypeName)
+			if (existingEntityType) {return existingEntityType}
+			// If we couldn't find the expected entity, throw a custom error.
+			throw new EntityNotFoundError()
+		})
+	// Update the city EntityType with a new list of Entities.
+		.then(existingEntity => {
+			// console.dir(existingEntityType)
+			var newEntries = []
+			fields.forEach(field => {
+				const entityField = normalizeEntityField(field)
+				if (!entityField) {
+					console.warn(`${LH} Skipping invalid entity field for '${entityTypeName}'`, { field })
+					return
+				}
+				if (!(existingEntity.entities.some(entity => entity.value == entityField.value))){
+					needsUpdate = true
+					console.warn(`Field ${entityField.value} did not exist.`)
+					existingEntity.entities.push(entityField)
+					newEntries.push(entityField.value)
+				} else {
+					const target = existingEntity.entities.find(e => e.value == entityField.value)
+					if (!target) return
+					const origSynonyms = Array.isArray(target.synonyms) ? target.synonyms : []
+					const origCount = origSynonyms.length
+					target.synonyms = [...new Set([].concat(origSynonyms, entityField.synonyms))]
+					newEntries.push(entityField.value)
+					if (origCount &lt; target.synonyms.length) {
+						needsUpdate = true
+					}
+				}
+			})
+			// Replace the EntityType's existing Entities with our new list.
+			//city.entities = updatedEntityList;
+
+			const request = {
+				entityType: existingEntity,
+				// Tell the API to only modify the 'entities' field, not any other
+				// fields of the EntityType.
+				updateMask: {
+					paths: ["entities"],
+				},
+			}
+			// Tell Dialogflow to update the EntityType.
+			if (needsUpdate) {
+				entitiesClient.updateEntityType(request)
+				return newEntries
+			} else {
+				return null
+			}
+		})
+	// Log the updated EntityType.
+		.then((updatedFields) => {
+			if (!updatedFields){
+				console.warn(`${LH} Entity ${entityTypeName} did not need to be updated (no new entries).`)
+			} else {
+				console.info(`${LH} Updated entity type '${entityTypeName}', affecting ${updatedFields.length} ${(updatedFields.length == 1 ? "field" : "fields")}: '${updatedFields.join("', '")}'`)
+			}
+		})
+	// Catch any errors.
+		.catch((err) => {
+			// If this is the error we throw earlier in the chain, log the
+			// cause of the problem.
+			if (err instanceof EntityNotFoundError) {
+				console.error(`${LH} Could not find the entity named ${entityTypeName}.`)
+				return
+			}
+			console.error(`${LH} Error updating entity type '${entityTypeName}':`, err)
+		})
+}
+
+
+
+
+
+/** Define a custom error object to help control flow in our Promise chain. */
+module.exports = {
+	addSingleEntity: addSingleEntity,
+	updateEntity,
+	syncAgentDownstream,
+	syncAgentUpstream
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<br class="clear">
+
+<footer>
+    Generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Mon Jun 08 2026 16:20:21 GMT+0200 (heure d’été d’Europe centrale) using the Minami theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/linenumber.js"></script>
+</body>
+</html>

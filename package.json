@@ -16,10 +16,11 @@
 		"test:charts": "node scripts/chart-smoke.js",
 		"test:all": "npm run test:intents && npm run test:handler && npm run test:charts",
 		"test:e2e": "node scripts/e2e-help-audit.js",
-		"test:logs": "node scripts/analyze-seven-logs.js"
+		"test:logs": "node scripts/analyze-seven-logs.js",
+		"doc:generate": "jsdoc -c jsdoc.config.json"
 	},
 	"engines": {
-		"node": ">=16.x"
+		"node": ">=20.x"
 	},
 	"dependencies": {
 		"@google-cloud/dialogflow": "^3.5.0",
@@ -62,8 +63,10 @@
 	"devDependencies": {
 		"bufferutil": "^4.0.6",
 		"eslint": "^7.32.0",
+		"jsdoc": "^4.0.5",
 		"minami": "^1.2.3",
+		"taffydb": "^2.7.3",
 		"zombie": "^6.1.4"
 	},
-	"repository": "https://github.com/Propolisa/Seven"
+	"repository": "https://github.com/psyray/Seven"
 }

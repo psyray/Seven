@@ -765,7 +765,17 @@ class HtbApiConnector {
 	}
 
 	getMemberIdFromUsername(username = "ThisUserCouldNotPossiblyExist") {
-		return this.htbApiGet(`search/fetch?query=${username}&tags=[%22users%22]`, true).then(res => (res.users ? res.users[0].id : null))
+		const name = (username || "").trim()
+		if (!/^[a-zA-Z0-9_]{2,30}$/.test(name)) {
+			return Promise.resolve(null)
+		}
+		const query = encodeURIComponent(name)
+		return this.htbApiGet(`search/fetch?query=${query}&tags=[%22users%22]`, true)
+			.then(res => (res.users ? res.users[0].id : null))
+			.catch(err => {
+				if (err.status === 400 || err.status === 404) return null
+				throw err
+			})
 	}
 
 	getMemberProfile(memberId) {
