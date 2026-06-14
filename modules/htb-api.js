@@ -193,6 +193,10 @@ function parseActivityTimestamp(entry) {
 	return Date.parse(raw)
 }
 
+function isOptionalMemberProfilePath(endpointPath) {
+	return OPTIONAL_MEMBER_PROFILE_PATH_PREFIXES.some(prefix => endpointPath.startsWith(prefix))
+}
+
 function loadOAuthTokensFromFile(filePath) {
 	if (!filePath) return null
 	try {
