@@ -27,7 +27,7 @@ Flow: `helpers/pusher-htb.js` (parse HTML) → `helpers/notification-router.js` 
 - Own filter: team member **or** first blood **or** linked Discord account
 - Fallback: `getRecentTeamActivity()` when Pusher unhealthy (`PUSHER_FALLBACK_POLL_MS`)
 - Admin: `admin.pusherStatus` / `seven pusher status`
-- Dev: `IS_DEV_INSTANCE=true` appends to `cache/PUSHER_MSG_LOG.json`; replay via `npm run test:pusher`
+- Dev: `IS_DEV_INSTANCE=true` appends to `LOG_DIR/PUSHER_MSG_LOG.json` (Docker) or `cache/PUSHER_MSG_LOG.json` (local); replay via `npm run test:pusher`
 - Event formats: `docs/developer/pusher-events.md`
 
 ## Optional API server

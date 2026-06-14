@@ -56,13 +56,13 @@ Logger modules: `[bot]`, `[datastore]`, `[htb-api]`, `[pusher-htb]`, `[notificat
 | No live own announces | Pusher down or bad token | `seven pusher status`; check `HTB_V4_TOKEN` (Pusher auth) |
 | Owns missed at boot | Channel not ready yet | Should queue — verify `DISCORD_ANNOUNCE_CHAN_ID`; restart if queue stuck |
 | No @mention on own | Account not linked | Link HTB↔Discord; check `PUSHER_MENTION_ON_OWN` |
-| Lab own not parsed | HTML format change | `IS_DEV_INSTANCE=true` → inspect `cache/PUSHER_MSG_LOG.json`; update parser |
+| Lab own not parsed | HTML format change | `IS_DEV_INSTANCE=true` → inspect `LOG_DIR/PUSHER_MSG_LOG.json` (Docker) or `cache/PUSHER_MSG_LOG.json` (local); update parser |
 
 ## Pusher diagnostics
 
 1. Admin: `seven pusher status` — connection state, queue size, recent events
 2. Logs: `[pusher-htb]` state changes, `[notification-router]` fallback polls
-3. Staging capture: `IS_DEV_INSTANCE=true` → `cache/PUSHER_MSG_LOG.json`
+3. Staging capture: `IS_DEV_INSTANCE=true` → `LOG_DIR/PUSHER_MSG_LOG.json` (Docker) or `cache/PUSHER_MSG_LOG.json` (local)
 4. Parser regression: `npm run test:pusher`
 5. Fallback: when Pusher unhealthy, polls `team/activity` every `PUSHER_FALLBACK_POLL_MS`
 

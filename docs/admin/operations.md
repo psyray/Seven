@@ -110,7 +110,7 @@ Seven announces team owns (and global first blood) on `DISCORD_ANNOUNCE_CHAN_ID`
 
 - No live announces but bot online → run `seven pusher status`; check `HTB_V4_TOKEN` (Pusher auth uses the same Bearer token)
 - Missed events after outage → fallback poll catches up; force `seven force update` for full member activity refresh
-- Collect raw payloads in staging → set `IS_DEV_INSTANCE=true` and inspect `cache/PUSHER_MSG_LOG.json`
+- Collect raw payloads in staging → set `IS_DEV_INSTANCE=true` and inspect `LOG_DIR/PUSHER_MSG_LOG.json` (Docker volume `seven_logs`) or `cache/PUSHER_MSG_LOG.json` locally
 
 ## Sync behaviour (automatic)
 

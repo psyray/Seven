@@ -275,6 +275,13 @@ class HtbApiConnector {
 		if (persist) {
 			this.persistOAuthTokens()
 		}
+		if (typeof this.onTokensRefreshed === "function") {
+			try {
+				this.onTokensRefreshed()
+			} catch (callbackError) {
+				log.warn("onTokensRefreshed callback failed", { message: callbackError.message })
+			}
+		}
 	}
 
 	persistOAuthTokens() {
@@ -366,6 +373,13 @@ class HtbApiConnector {
 		this.tokenExpiryWarned = false
 		this.persistOAuthTokens()
 		log.info("OAuth session refreshed", { expiresAt: this.getTokenExpiry()?.toISOString() || "unknown" })
+		if (typeof this.onTokensRefreshed === "function") {
+			try {
+				this.onTokensRefreshed()
+			} catch (callbackError) {
+				log.warn("onTokensRefreshed callback failed", { message: callbackError.message })
+			}
+		}
 	}
 
 	buildAuthHttpError(response, label) {
@@ -435,6 +449,31 @@ class HtbApiConnector {
 	}
 
 	async htbApiGet(endpointPath, parseText = false, options = {}) {
+		try {
+			return await this._htbApiGetOnce(endpointPath, parseText, options)
+		} catch (error) {
+			if (error.status !== 401) {
+				throw error
+			}
+			log.warn("HTB API returned 401 — attempting OAuth refresh", { endpoint: endpointPath })
+			try {
+				await this.refreshSessionToken()
+				return await this._htbApiGetOnce(endpointPath, parseText, options)
+			} catch (retryError) {
+				if (retryError instanceof HtbAuthError) {
+					throw retryError
+				}
+				if (retryError.status === 401) {
+					throw new HtbAuthError(
+						`HTB API unauthorized for ${endpointPath} after token refresh — re-login on HTB and update HTB_V4_TOKEN + HTB_REFRESH_TOKEN`
+					)
+				}
+				throw new HtbAuthError(retryError.message || `HTB authentication failed for ${endpointPath}`)
+			}
+		}
+	}
+
+	async _htbApiGetOnce(endpointPath, parseText = false, options = {}) {
 		const base = options.base || HTB_API_BASE
 		const endpoint = getThrottleEndpointKey(endpointPath)
 		await this.ensureValidToken()

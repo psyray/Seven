@@ -2,7 +2,7 @@
 
 Seven subscribes to HTB public Pusher channels (`helpers/pusher-htb.js`) and parses HTML payloads into structured `HtbPusherEvent` objects.
 
-Collect live samples with `IS_DEV_INSTANCE=true` — events append to `cache/PUSHER_MSG_LOG.json`.
+Collect live samples with `IS_DEV_INSTANCE=true` — events append to `LOG_DIR/PUSHER_MSG_LOG.json` (Docker: `/var/log/sevenbot/PUSHER_MSG_LOG.json`) or `./cache/PUSHER_MSG_LOG.json` locally.
 
 ## Channels
 
@@ -114,7 +114,7 @@ Expected: `{ uid: 12345, type: "respect" }`
 ## Dev workflow
 
 1. Set `IS_DEV_INSTANCE=true` in `.env`
-2. Ensure `cache/PUSHER_MSG_LOG.json` exists (`[]`)
+2. Ensure dev log path is writable (`LOG_DIR` in Docker, `./cache/` locally)
 3. Run bot; owns append to the log file
 4. Replay samples: `npm run test:pusher`
 

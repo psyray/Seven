@@ -22,6 +22,7 @@ if (process.env.NODE_ENV != "development") {
 const Discord = require("discord.js")
 const client = new Discord.Client()
 const fs = require("fs")
+const path = require("path")
 const { struct } = require("pb-util")
 const dialogflow = require("@google-cloud/dialogflow").v2beta1
 const dflow = new dialogflow.SessionsClient({ credentials: JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS || "{}") })
@@ -73,6 +74,34 @@ if (IS_DEV_INSTANCE) {
 	console.error("DEVELOPMENT MODE ON.\n  Only queries by the developer will be responded to by this instance.\n  (Avoids conflicts/ duplicate responses in production use)")
 }
 
+const PUSHER_MSG_LOG_PATH = process.env.LOG_DIR
+	? path.join(process.env.LOG_DIR, "PUSHER_MSG_LOG.json")
+	: path.join(__dirname, "cache", "PUSHER_MSG_LOG.json")
+
+function loadPusherMsgLog() {
+	const cacheDir = path.dirname(PUSHER_MSG_LOG_PATH)
+	try {
+		if (!fs.existsSync(cacheDir)) {
+			fs.mkdirSync(cacheDir, { recursive: true })
+		}
+	} catch (error) {
+		console.error(`Cannot create Pusher dev log directory (${cacheDir}): ${error.message}`)
+		return []
+	}
+	if (!fs.existsSync(PUSHER_MSG_LOG_PATH)) {
+		fs.writeFileSync(PUSHER_MSG_LOG_PATH, "[]\n")
+		return []
+	}
+	try {
+		const parsed = JSON.parse(fs.readFileSync(PUSHER_MSG_LOG_PATH, "utf8"))
+		return Array.isArray(parsed) ? parsed : []
+	} catch (error) {
+		log.warn("Invalid PUSHER_MSG_LOG.json — resetting to empty array", { message: error.message, path: PUSHER_MSG_LOG_PATH })
+		fs.writeFileSync(PUSHER_MSG_LOG_PATH, "[]\n")
+		return []
+	}
+}
+
 
 /*** INIT GLOBAL STUFF ***/
 
@@ -80,7 +109,7 @@ var DISCORD_ANNOUNCE_CHAN = false         // The Discord Channel object intended
 var HTB_PUSHER_OWNS_SUBSCRIPTION = false  // The Pusher Client own channel subscription.
 var NOTIFICATION_ROUTER = null
 const SEVEN_DB_TABLE_NAME = "seven_data"
-var PUSHER_MSG_LOG = DEV_MODE_ON ? require("./cache/PUSHER_MSG_LOG.json") : null
+var PUSHER_MSG_LOG = DEV_MODE_ON ? loadPusherMsgLog() : null
 
 const CHART_RENDERER = htbCharts
 const DAT = new SevenDatastore()    // Open an abstract storage container for HTB / bot data
@@ -499,9 +528,10 @@ async function main() {
 	await importDbBackup()
 	
 	DAT.TEAM_STATS.teamFounder = process.env.FOUNDER_HTB_ID
-	try {
-		await DAT.init()
-		log.info("HTB OAuth session loaded", { expiresAt: DAT.V4API.getTokenExpiry()?.toISOString() || "unknown" })
+		try {
+			await DAT.init()
+			DAT.V4API.onTokensRefreshed = syncPusherAuth
+			log.info("HTB OAuth session loaded", { expiresAt: DAT.V4API.getTokenExpiry()?.toISOString() || "unknown" })
 	} catch (error) {
 		if (error instanceof HtbTokenExpiredError || error instanceof HtbAuthError) {
 			pendingHtbAuthFailure = error
@@ -532,7 +562,7 @@ async function main() {
 	HTB_PUSHER_OWNS_SUBSCRIPTION.on("pusherevent", async message => {
 		if (DEV_MODE_ON) {
 			PUSHER_MSG_LOG.push(message)
-			fs.writeFileSync("./cache/PUSHER_MSG_LOG.json", JSON.stringify(PUSHER_MSG_LOG, null, 2))
+			fs.writeFileSync(PUSHER_MSG_LOG_PATH, JSON.stringify(PUSHER_MSG_LOG, null, 2))
 		}
 		await NOTIFICATION_ROUTER.handlePusherEvent(message)
 	})
