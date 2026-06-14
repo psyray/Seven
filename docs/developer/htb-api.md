@@ -10,7 +10,8 @@ Seven connects to Hack The Box using **OAuth access/refresh tokens** on the v4 A
 | Refresh token | `HTB_REFRESH_TOKEN` — Passport refresh token (`def50200...`) |
 | Header | `Authorization: Bearer <access>` on all v4 and v5 requests |
 | Refresh | `POST ${HTB_API_BASE}/login/refresh` with `{ refresh_token }` — automatic when access expires within 120s |
-| Persistence | Optional `HTB_TOKEN_FILE` JSON updated after each refresh |
+| Persistence | `HTB_TOKEN_FILE` JSON + optional `HTB_ENV_FILE` `.env` sync after each refresh |
+| Load order | `HTB_TOKEN_FILE` first, then `.env` — never mix stale `.env` refresh with file access token |
 | Hot-reload | Discord `seven set htb tokens <access> <refresh>` or watch `HTB_TOKEN_FILE` |
 
 Obtain the token pair: log in on [labs.hackthebox.com](https://labs.hackthebox.com) via browser → DevTools → Network → capture `login/refresh` response (`message.access_token` + `message.refresh_token`).
@@ -86,7 +87,8 @@ Helper methods:
 |----------|----------|---------|-------------|
 | `HTB_V4_TOKEN` | Yes | — | OAuth access token (JWT) |
 | `HTB_REFRESH_TOKEN` | Yes | — | OAuth refresh token |
-| `HTB_TOKEN_FILE` | No | — | JSON file for token persistence and hot-reload |
+| `HTB_TOKEN_FILE` | No | — | JSON file for token persistence and hot-reload (startup priority) |
+| `HTB_ENV_FILE` | No | — | `.env` path synced after each refresh |
 | `HTB_TOKEN_EXPIRY_WARN_DAYS` | No | 1 | Days before access expiry to alert admins |
 | `HTB_TEAM_ID` | Yes* | — | Team ID |
 | `HTB_UNIVERSITY_ID` | Alt* | — | University instead of team |

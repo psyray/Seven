@@ -6,6 +6,7 @@ require("superagent-retry-delay")(request)
 const { Helpers: H } = require("../helpers/helpers.js")
 const { HTB_API_BASE, HTB_API_V5_BASE } = require("../config/htb.js")
 const { createLogger } = require("../helpers/logger.js")
+const { updateEnvFileOAuthTokens } = require("../helpers/env-tokens.js")
 
 const log = createLogger("htb-api")
 const VERBOSE_API_REQUESTS = process.env.HTB_API_LOG_REQUESTS === "true"
@@ -191,12 +192,22 @@ function loadOAuthTokensFromFile(filePath) {
 		const data = JSON.parse(fs.readFileSync(filePath, "utf8"))
 		const accessToken = (data.access_token || data.HTB_V4_TOKEN || "").trim()
 		const refreshToken = (data.refresh_token || data.HTB_REFRESH_TOKEN || "").trim()
-		if (!accessToken || !refreshToken) return null
+		if (!accessToken || !refreshToken) {
+			log.warn("HTB_TOKEN_FILE missing access or refresh token", { path: filePath })
+			return null
+		}
 		return { access_token: accessToken, refresh_token: refreshToken }
 	} catch (error) {
 		log.warn("Failed to read HTB_TOKEN_FILE", { path: filePath, message: error.message })
 		return null
 	}
+}
+
+function writeJsonAtomic(filePath, payload) {
+	fs.mkdirSync(path.dirname(filePath), { recursive: true })
+	const tmpPath = `${filePath}.tmp.${process.pid}`
+	fs.writeFileSync(tmpPath, payload, { mode: 0o600 })
+	fs.renameSync(tmpPath, filePath)
 }
 
 class HtbApiConnector {
@@ -205,6 +216,7 @@ class HtbApiConnector {
 		this.API_TOKEN = ""
 		this.REFRESH_TOKEN = ""
 		this.tokenFilePath = (process.env.HTB_TOKEN_FILE || "").trim()
+		this.envFilePath = (process.env.HTB_ENV_FILE || "").trim()
 		this._tokenRefreshPromise = null
 		this.throttles = {}
 		this.rateLimitBuckets = {}
@@ -217,9 +229,27 @@ class HtbApiConnector {
 		})
 	}
 
-	async init({ api_token, refresh_token } = {}) {
+	resolveOAuthTokens({ api_token, refresh_token } = {}) {
+		const fileTokens = this.tokenFilePath ? loadOAuthTokensFromFile(this.tokenFilePath) : null
+		if (fileTokens) {
+			return fileTokens
+		}
+
+		if (this.tokenFilePath && fs.existsSync(this.tokenFilePath)) {
+			log.error("HTB_TOKEN_FILE exists but could not be loaded — fix the file or remove it before falling back to .env", {
+				path: this.tokenFilePath,
+			})
+		}
+
 		const accessToken = (api_token || process.env.HTB_V4_TOKEN || "").trim()
 		const refreshToken = (refresh_token || process.env.HTB_REFRESH_TOKEN || "").trim()
+		return { access_token: accessToken, refresh_token: refreshToken }
+	}
+
+	async init({ api_token, refresh_token } = {}) {
+		const tokens = this.resolveOAuthTokens({ api_token, refresh_token })
+		const accessToken = tokens.access_token
+		const refreshToken = tokens.refresh_token
 
 		if (!accessToken || !refreshToken) {
 			throw new Error("Configure HTB_V4_TOKEN and HTB_REFRESH_TOKEN")
@@ -229,18 +259,27 @@ class HtbApiConnector {
 		this.REFRESH_TOKEN = refreshToken
 		this.tokenExpiryWarned = false
 
+		const tokenSource = this.tokenFilePath && fs.existsSync(this.tokenFilePath) && loadOAuthTokensFromFile(this.tokenFilePath)
+			? "HTB_TOKEN_FILE"
+			: "environment"
+
 		if (this.checkTokenExpiring(this.API_TOKEN)) {
 			log.info("Access token expiring at startup — refreshing")
 			await this.refreshSessionToken()
-		} else {
+		} else if (this.tokenFilePath && !fs.existsSync(this.tokenFilePath)) {
 			this.persistOAuthTokens()
 		}
 
-		if (!this.tokenFilePath) {
-			log.warn("HTB_TOKEN_FILE is not set — OAuth tokens are not persisted across restarts; update .env after each refresh or configure a token file")
+		if (!this.tokenFilePath && !this.envFilePath) {
+			log.warn("Neither HTB_TOKEN_FILE nor HTB_ENV_FILE is set — OAuth tokens are not persisted across restarts; configure one or update .env manually after each refresh")
+		} else if (!this.envFilePath) {
+			log.warn("HTB_ENV_FILE is not set — refreshed tokens are saved to HTB_TOKEN_FILE only; set HTB_ENV_FILE to keep .env in sync across restarts")
 		}
 
-		log.info("OAuth session loaded", { expiresAt: this.getTokenExpiry()?.toISOString() || "unknown" })
+		log.info("OAuth session loaded", {
+			expiresAt: this.getTokenExpiry()?.toISOString() || "unknown",
+			source: tokenSource,
+		})
 	}
 
 	getAuthMode() {
@@ -285,19 +324,43 @@ class HtbApiConnector {
 	}
 
 	persistOAuthTokens() {
-		if (!this.tokenFilePath) return
-
-		try {
-			fs.mkdirSync(path.dirname(this.tokenFilePath), { recursive: true })
-			const payload = JSON.stringify({
-				access_token: this.API_TOKEN,
-				refresh_token: this.REFRESH_TOKEN,
-			}, null, 2)
-			fs.writeFileSync(this.tokenFilePath, payload, { mode: 0o600 })
-			log.info("OAuth tokens persisted", { path: this.tokenFilePath })
-		} catch (error) {
-			log.warn("Failed to persist HTB_TOKEN_FILE", { path: this.tokenFilePath, message: error.message })
+		if (this.tokenFilePath) {
+			try {
+				const payload = JSON.stringify({
+					access_token: this.API_TOKEN,
+					refresh_token: this.REFRESH_TOKEN,
+				}, null, 2)
+				writeJsonAtomic(this.tokenFilePath, payload)
+				log.info("OAuth tokens persisted", { path: this.tokenFilePath })
+			} catch (error) {
+				log.warn("Failed to persist HTB_TOKEN_FILE", { path: this.tokenFilePath, message: error.message })
+			}
 		}
+
+		if (this.envFilePath) {
+			updateEnvFileOAuthTokens(this.envFilePath, this.API_TOKEN, this.REFRESH_TOKEN)
+		}
+	}
+
+	async reloadTokensFromFile({ refreshIfExpiring = true } = {}) {
+		if (!this.tokenFilePath) return false
+
+		const fromFile = loadOAuthTokensFromFile(this.tokenFilePath)
+		if (!fromFile) return false
+
+		if (fromFile.access_token === this.API_TOKEN && fromFile.refresh_token === this.REFRESH_TOKEN) {
+			return false
+		}
+
+		this.API_TOKEN = fromFile.access_token
+		this.REFRESH_TOKEN = fromFile.refresh_token
+		this.tokenExpiryWarned = false
+
+		if (refreshIfExpiring && this.checkTokenExpiring(this.API_TOKEN)) {
+			await this.refreshSessionToken()
+		}
+
+		return true
 	}
 
 	getThrottle(endpoint) {
@@ -333,13 +396,8 @@ class HtbApiConnector {
 	async ensureValidToken() {
 		if (!this.checkTokenExpiring(this.API_TOKEN)) return
 
-		if (!this._tokenRefreshPromise) {
-			this._tokenRefreshPromise = this.refreshSessionToken()
-				.finally(() => { this._tokenRefreshPromise = null })
-		}
-
 		try {
-			await this._tokenRefreshPromise
+			await this.refreshSessionToken()
 		} catch (error) {
 			if (!this.tokenExpiryWarned) {
 				this.tokenExpiryWarned = true
@@ -352,6 +410,14 @@ class HtbApiConnector {
 	}
 
 	async refreshSessionToken() {
+		if (!this._tokenRefreshPromise) {
+			this._tokenRefreshPromise = this._refreshSessionTokenOnce()
+				.finally(() => { this._tokenRefreshPromise = null })
+		}
+		return this._tokenRefreshPromise
+	}
+
+	async _refreshSessionTokenOnce() {
 		if (!this.REFRESH_TOKEN) {
 			throw new HtbAuthError("HTB_REFRESH_TOKEN is missing")
 		}

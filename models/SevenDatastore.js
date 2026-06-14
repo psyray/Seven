@@ -28,7 +28,7 @@ const {
 
 const { HtbSpecialFlag } = require("../helpers/classes.js")
 const fs = require("fs")
-const { HtbApiConnector: V4, loadOAuthTokensFromFile } = require("../modules/htb-api.js")
+const { HtbApiConnector: V4 } = require("../modules/htb-api.js")
 const dFlowEnt = require("../helpers/dflow")
 const { Helpers: H } = require("../helpers/helpers.js")
 const { createLogger } = require("../helpers/logger.js")
@@ -136,11 +136,7 @@ class SevenDatastore {
 	}
 
 	init() {
-		const fromFile = loadOAuthTokensFromFile(process.env.HTB_TOKEN_FILE)
-		return this.V4API.init({
-			api_token: fromFile?.access_token || process.env.HTB_V4_TOKEN,
-			refresh_token: fromFile?.refresh_token || process.env.HTB_REFRESH_TOKEN,
-		})
+		return this.V4API.init()
 	}
 
 	hasCachedObject(data) {

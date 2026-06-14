@@ -125,14 +125,14 @@ Section order: `machines → specials → tags → team → challenges`
 
 ## HTB token maintenance
 
-Seven uses OAuth access/refresh tokens. The access token (~72h) is renewed automatically before expiry.
+Seven uses OAuth access/refresh tokens. The access token (~72h) is renewed automatically before expiry. HTB rotates the refresh token on each refresh — Seven persists the new pair to `HTB_TOKEN_FILE` and, when configured, syncs `HTB_V4_TOKEN` / `HTB_REFRESH_TOKEN` back into `HTB_ENV_FILE` (Docker Compose mounts `./.env` at `/config/seven.env`).
 
 When refresh fails (`HTB_REFRESH_TOKEN invalid`):
 
 1. Re-login on [labs.hackthebox.com](https://labs.hackthebox.com) in a browser
 2. Capture a new pair from DevTools → Network → `login/refresh`
-3. Update `.env`, **or** write to `HTB_TOKEN_FILE`, **or** run in Discord: `seven set htb tokens <access> <refresh>`
-4. Restart only if you edited `.env` directly: `npm run docker:restart`
+3. Update `.env`, **or** run in Discord: `seven set htb tokens <access> <refresh>` (updates memory + both persistence paths)
+4. Restart only if you edited `.env` manually without `HTB_ENV_FILE` mount: `npm run docker:restart`
 
 Proactive warnings are sent to `DISCORD_ANNOUNCE_CHAN_ID` when access expiry is within `HTB_TOKEN_EXPIRY_WARN_DAYS` (default 1).
 

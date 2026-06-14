@@ -29,9 +29,9 @@ Seven uses OAuth access/refresh tokens on the HTB v4 API. Both are **required** 
 
 The access token expires in ~72 hours; Seven refreshes it automatically via `POST /api/v4/login/refresh`.
 
-### Optional: token file (Docker)
+### Optional: token persistence (Docker)
 
-Set `HTB_TOKEN_FILE=/var/log/sevenbot/htb_tokens.json` in `.env` (Docker Compose volume `seven_logs`). Seven updates it after each refresh so restarts use the latest pair:
+Set `HTB_TOKEN_FILE=/var/log/sevenbot/htb_tokens.json` (volume `seven_logs`) and `HTB_ENV_FILE=/config/seven.env` (Compose mounts `./.env` read-write). Seven loads the file first on startup and, after each OAuth refresh, updates both the JSON file and `.env` so restarts never reuse a stale refresh token from `.env` alone:
 
 ```json
 {

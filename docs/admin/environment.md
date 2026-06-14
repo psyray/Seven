@@ -52,7 +52,8 @@ Optional tuning for real-time own announcements. Defaults enable all own types e
 |----------|----------|---------|-------------|
 | `HTB_V4_TOKEN` | Yes | — | OAuth access token (JWT) from browser login |
 | `HTB_REFRESH_TOKEN` | Yes | — | OAuth refresh token (`def50200...`) |
-| `HTB_TOKEN_FILE` | No | — | JSON file path for persistence and hot-reload |
+| `HTB_TOKEN_FILE` | No | — | JSON file path for persistence and hot-reload (loaded first on startup) |
+| `HTB_ENV_FILE` | No | — | `.env` path updated after each OAuth refresh (Docker: `/config/seven.env`) |
 | `HTB_TOKEN_EXPIRY_WARN_DAYS` | No | `1` | Alert admins this many days before access expiry |
 | `HTB_API_BASE` | No | `https://labs.hackthebox.com/api/v4` | v4 API base URL |
 | `HTB_API_V5_BASE` | No | `https://labs.hackthebox.com/api/v5` | v5 API base (machine lists) |

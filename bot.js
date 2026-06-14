@@ -477,19 +477,10 @@ function setupHtbTokenFileWatcher() {
 	const tokenFile = process.env.HTB_TOKEN_FILE
 	if (!tokenFile) return
 
-	const loadTokensFromFile = async () => {
+	const reloadFromFile = async () => {
 		try {
-			if (!fs.existsSync(tokenFile)) return
-			const data = JSON.parse(fs.readFileSync(tokenFile, "utf8"))
-			const accessToken = (data.access_token || data.HTB_V4_TOKEN || "").trim()
-			const refreshToken = (data.refresh_token || data.HTB_REFRESH_TOKEN || "").trim()
-			if (!accessToken || !refreshToken) return
-			DAT.V4API.API_TOKEN = accessToken
-			DAT.V4API.REFRESH_TOKEN = refreshToken
-			DAT.V4API.tokenExpiryWarned = false
-			if (DAT.V4API.checkTokenExpiring(accessToken)) {
-				await DAT.V4API.refreshSessionToken()
-			}
+			const changed = await DAT.V4API.reloadTokensFromFile()
+			if (!changed) return
 			clearHtbAuthFailureAlert()
 			syncPusherAuth()
 			log.info("HTB OAuth tokens reloaded from file", { path: tokenFile })
@@ -498,8 +489,8 @@ function setupHtbTokenFileWatcher() {
 		}
 	}
 
-	loadTokensFromFile()
-	fs.watchFile(tokenFile, { interval: 60000 }, loadTokensFromFile)
+	reloadFromFile()
+	fs.watchFile(tokenFile, { interval: 60000 }, reloadFromFile)
 	log.info("Watching HTB_TOKEN_FILE for changes", { path: tokenFile })
 }
 

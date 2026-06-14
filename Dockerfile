@@ -18,17 +18,16 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
 
 WORKDIR /app
 
-COPY package*.json ./
+RUN addgroup --system seven && adduser --system --ingroup seven seven \
+  && mkdir -p /var/log/sevenbot \
+  && chown seven:seven /app /var/log/sevenbot
+
+COPY --chown=seven:seven package*.json ./
+USER seven
 RUN npm ci --omit=dev
 
-# Application config
-COPY config/htb.js ./config/htb.js
-COPY . .
-
-RUN addgroup --system seven && adduser --system --ingroup seven seven \
-  && mkdir -p /var/log/sevenbot && chown -R seven:seven /app /var/log/sevenbot
-
-USER seven
+COPY --chown=seven:seven config/htb.js ./config/htb.js
+COPY --chown=seven:seven . .
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "bot.js"]

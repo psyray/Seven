@@ -38,11 +38,13 @@ services:
       PGDATABASE: ${POSTGRES_DB:-seven}
       LOG_DIR: /var/log/sevenbot
       HTB_TOKEN_FILE: /var/log/sevenbot/htb_tokens.json
+      HTB_ENV_FILE: /config/seven.env
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - seven_logs:/var/log/sevenbot
+      - ./.env:/config/seven.env:rw
     networks:
       - seven_net
     security_opt:
