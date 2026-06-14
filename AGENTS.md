@@ -48,12 +48,13 @@ static/
 3. **Query**: User message → DialogFlow intent OR `resolveEnt()` → `HtbEmbeds` → `Send.embed()`
 4. **Persist**: `updateCache()` writes in-memory state back to Postgres
 
-## HTB API (v4-only auth)
+## HTB API (v4 OAuth auth)
 
-- Auth: `HTB_V4_TOKEN` (App Token from app.hackthebox.com) — **no v3 session, no password login**
+- Auth: `HTB_V4_TOKEN` (OAuth access JWT) + `HTB_REFRESH_TOKEN` (refresh) — **no v3 session, no password login**
+- Refresh: `POST labs.hackthebox.com/api/v4/login/refresh` — automatic before access expiry
+- Optional: `HTB_TOKEN_FILE` JSON persisted after each refresh
 - v4 base: `https://labs.hackthebox.com/api/v4` (profiles, team, challenges, …)
 - v5 base: `https://labs.hackthebox.com/api/v5` (machine list pagination)
-- Token expiry: regenerate on app.hackthebox.com and restart — no auto-refresh
 
 ## Sync modes (`SevenDatastore.update`)
 

@@ -15,7 +15,7 @@ HTB_API_V5_BASE // v5 — machine list pagination
 HTB_APP_BASE    // https://app.hackthebox.com — profile/badge URLs
 ```
 
-Token: `process.env.HTB_V4_TOKEN`. Expired token → log warn + throw; user must regenerate App Token.
+Token: `HTB_V4_TOKEN` (OAuth access JWT) + `HTB_REFRESH_TOKEN` (refresh). Auto-refresh via `POST ${HTB_API_BASE}/login/refresh`; persist to `HTB_TOKEN_FILE` JSON after each refresh. Invalid refresh → `HtbAuthError` (bot stays online, cache consultable).
 
 ## htb-api.js patterns
 

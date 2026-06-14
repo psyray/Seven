@@ -14,17 +14,36 @@ Step-by-step deployment of Seven with Docker Compose.
    - **Emoji guild ID** (can be same guild) → `EMOJI_GUILD_ID`
    - Your Discord user ID → add to `ADMIN_DISCORD_IDS` and `CAPTAIN_DISCORD_IDS`
 
-## 2. Hack The Box App Token
+## 2. Hack The Box authentication
 
-Seven uses **v4-only authentication**. There is no HTB password login.
+Seven uses OAuth access/refresh tokens on the HTB v4 API. Both are **required** in `.env`.
 
-1. Log in to [app.hackthebox.com](https://app.hackthebox.com).
-2. Profile → Settings → **App Tokens** → generate a new token.
-3. Copy to `HTB_V4_TOKEN` in `.env`.
+### Obtain the OAuth token pair
+
+1. Log in to [labs.hackthebox.com](https://labs.hackthebox.com) in a browser (HTB Account OAuth).
+2. Open DevTools → **Network** tab.
+3. Filter for `login/refresh` (or trigger a page load that refreshes the session).
+4. Copy from the response JSON:
+   - `message.access_token` → `HTB_V4_TOKEN`
+   - `message.refresh_token` → `HTB_REFRESH_TOKEN`
+
+The access token expires in ~72 hours; Seven refreshes it automatically via `POST /api/v4/login/refresh`.
+
+### Optional: token file (Docker)
+
+Set `HTB_TOKEN_FILE=/var/log/sevenbot/htb_tokens.json` in `.env` (Docker Compose volume `seven_logs`). Seven updates it after each refresh so restarts use the latest pair:
+
+```json
+{
+  "access_token": "...",
+  "refresh_token": "..."
+}
+```
+
+### Team ID
+
 4. Set `HTB_TEAM_ID` to your team's numeric ID (from the team URL on HTB).
 5. Optionally set `FOUNDER_HTB_ID` if auto-detection fails.
-
-**Token expiry:** App Tokens expire. When expired, sync fails with HTML errors in logs. Regenerate the token on HTB and restart: `npm run docker:restart`.
 
 For university deployments, use `HTB_UNIVERSITY_ID` instead of `HTB_TEAM_ID`.
 

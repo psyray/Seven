@@ -1,22 +1,26 @@
 # HTB API Integration
 
-Seven connects to Hack The Box using **v4-only App Token authentication**. The legacy password/session connector has been removed.
+Seven connects to Hack The Box using **OAuth access/refresh tokens** on the v4 API.
 
 ## Authentication
 
 | Item | Value |
 |------|-------|
-| Token | `HTB_V4_TOKEN` — App Token from app.hackthebox.com → Settings → App Tokens |
-| Header | `Authorization: Bearer <token>` on all v4 and v5 requests |
-| Refresh | **Manual only** — regenerate on HTB and restart the bot |
-| Expiry detection | JWT parse + HTML response detection when token is invalid |
+| Access token | `HTB_V4_TOKEN` — JWT from browser OAuth login |
+| Refresh token | `HTB_REFRESH_TOKEN` — Passport refresh token (`def50200...`) |
+| Header | `Authorization: Bearer <access>` on all v4 and v5 requests |
+| Refresh | `POST ${HTB_API_BASE}/login/refresh` with `{ refresh_token }` — automatic when access expires within 120s |
+| Persistence | Optional `HTB_TOKEN_FILE` JSON updated after each refresh |
+| Hot-reload | Discord `seven set htb tokens <access> <refresh>` or watch `HTB_TOKEN_FILE` |
+
+Obtain the token pair: log in on [labs.hackthebox.com](https://labs.hackthebox.com) via browser → DevTools → Network → capture `login/refresh` response (`message.access_token` + `message.refresh_token`).
 
 ### Removed (do not reintroduce)
 
 - HTB v3 session/cookie authentication
-- `HTB_LEGACY_*` credentials
-- Password-based login or auto-refresh
-- `.env_sample` template
+- App Token without refresh (`app.hackthebox.com` static tokens)
+- Service account / password login / Turnstile captcha
+- `HTB_AUTH_*`, `HTB_SERVICE_*`, `HTB_V4_TOKEN_FILE`
 
 ## API version usage
 
@@ -80,7 +84,10 @@ Helper methods:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `HTB_V4_TOKEN` | Yes | — | App Token |
+| `HTB_V4_TOKEN` | Yes | — | OAuth access token (JWT) |
+| `HTB_REFRESH_TOKEN` | Yes | — | OAuth refresh token |
+| `HTB_TOKEN_FILE` | No | — | JSON file for token persistence and hot-reload |
+| `HTB_TOKEN_EXPIRY_WARN_DAYS` | No | 1 | Days before access expiry to alert admins |
 | `HTB_TEAM_ID` | Yes* | — | Team ID |
 | `HTB_UNIVERSITY_ID` | Alt* | — | University instead of team |
 | `HTB_API_BASE` | No | labs v4 | v4 base URL |
@@ -122,8 +129,9 @@ LOG_LEVEL=debug HTB_API_LOG_REQUESTS=true npm run docker:restart
 
 Look for:
 
+- `OAuth session loaded` / `OAuth session refreshed` — auth OK
 - `v5 list + selective v4 profiles` — machine phase
-- `Non-JSON HTML response` — expired token
+- `HTB_REFRESH_TOKEN invalid` — re-login required
 - Rate-limit wait heartbeats — slow but normal for large syncs
 
 ## References

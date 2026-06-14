@@ -1,3 +1,5 @@
+const fs = require("fs")
+const path = require("path")
 const request = require("superagent")
 const Throttle = require("superagent-throttle")
 require("superagent-retry-delay")(request)
@@ -137,6 +139,21 @@ function isHtmlResponse(text) {
 }
 
 const HTB_NO_RETRY_STATUSES = [400, 401, 403, 404, 405, 410, 422]
+const TOKEN_EXPIRY_BUFFER_SEC = 120
+
+class HtbTokenExpiredError extends Error {
+	constructor(message = "HTB token expired") {
+		super(message)
+		this.name = "HtbTokenExpiredError"
+	}
+}
+
+class HtbAuthError extends Error {
+	constructor(message = "HTB authentication failed") {
+		super(message)
+		this.name = "HtbAuthError"
+	}
+}
 
 function extractListData(response) {
 	const data = response?.data ?? response?.message ?? response?.info
@@ -167,10 +184,28 @@ function isOptionalMemberProfilePath(endpointPath) {
 	return OPTIONAL_MEMBER_PROFILE_PATH_PREFIXES.some(prefix => endpointPath.startsWith(prefix))
 }
 
+function loadOAuthTokensFromFile(filePath) {
+	if (!filePath) return null
+	try {
+		if (!fs.existsSync(filePath)) return null
+		const data = JSON.parse(fs.readFileSync(filePath, "utf8"))
+		const accessToken = (data.access_token || data.HTB_V4_TOKEN || "").trim()
+		const refreshToken = (data.refresh_token || data.HTB_REFRESH_TOKEN || "").trim()
+		if (!accessToken || !refreshToken) return null
+		return { access_token: accessToken, refresh_token: refreshToken }
+	} catch (error) {
+		log.warn("Failed to read HTB_TOKEN_FILE", { path: filePath, message: error.message })
+		return null
+	}
+}
+
 class HtbApiConnector {
 
 	constructor() {
 		this.API_TOKEN = ""
+		this.REFRESH_TOKEN = ""
+		this.tokenFilePath = (process.env.HTB_TOKEN_FILE || "").trim()
+		this._tokenRefreshPromise = null
 		this.throttles = {}
 		this.rateLimitBuckets = {}
 		this.tokenExpiryWarned = false
@@ -182,13 +217,79 @@ class HtbApiConnector {
 		})
 	}
 
-	async init({ api_token }) {
-		if (!api_token) {
-			throw new Error("HTB_V4_TOKEN must be configured")
+	async init({ api_token, refresh_token } = {}) {
+		const accessToken = (api_token || process.env.HTB_V4_TOKEN || "").trim()
+		const refreshToken = (refresh_token || process.env.HTB_REFRESH_TOKEN || "").trim()
+
+		if (!accessToken || !refreshToken) {
+			throw new Error("Configure HTB_V4_TOKEN and HTB_REFRESH_TOKEN")
 		}
-		this.API_TOKEN = api_token
-		if (this.checkTokenExpiring(api_token)) {
-			log.warn("HTB_V4_TOKEN is expired or expiring soon. Regenerate it on app.hackthebox.com.")
+
+		this.API_TOKEN = accessToken
+		this.REFRESH_TOKEN = refreshToken
+		this.tokenExpiryWarned = false
+
+		if (this.checkTokenExpiring(this.API_TOKEN)) {
+			log.info("Access token expiring at startup — refreshing")
+			await this.refreshSessionToken()
+		} else {
+			this.persistOAuthTokens()
+		}
+
+		if (!this.tokenFilePath) {
+			log.warn("HTB_TOKEN_FILE is not set — OAuth tokens are not persisted across restarts; update .env after each refresh or configure a token file")
+		}
+
+		log.info("OAuth session loaded", { expiresAt: this.getTokenExpiry()?.toISOString() || "unknown" })
+	}
+
+	getAuthMode() {
+		return "oauth_refresh"
+	}
+
+	getTokenExpiry(token = this.API_TOKEN) {
+		const payload = parseJwt(token)
+		if (!payload?.exp) return null
+		return new Date(payload.exp * 1000)
+	}
+
+	setOAuthTokens(accessToken, refreshToken, { persist = true } = {}) {
+		const access = (accessToken || "").trim()
+		const refresh = (refreshToken || "").trim()
+
+		if (!access) {
+			throw new HtbAuthError("HTB access token cannot be empty")
+		}
+		if (!refresh) {
+			throw new HtbAuthError("HTB refresh token cannot be empty")
+		}
+		if (this.checkTokenExpiring(access)) {
+			throw new HtbTokenExpiredError("Provided HTB access token is already expired")
+		}
+
+		this.API_TOKEN = access
+		this.REFRESH_TOKEN = refresh
+		this.tokenExpiryWarned = false
+		log.info("HTB OAuth tokens updated in memory", { expiresAt: this.getTokenExpiry()?.toISOString() || "unknown" })
+
+		if (persist) {
+			this.persistOAuthTokens()
+		}
+	}
+
+	persistOAuthTokens() {
+		if (!this.tokenFilePath) return
+
+		try {
+			fs.mkdirSync(path.dirname(this.tokenFilePath), { recursive: true })
+			const payload = JSON.stringify({
+				access_token: this.API_TOKEN,
+				refresh_token: this.REFRESH_TOKEN,
+			}, null, 2)
+			fs.writeFileSync(this.tokenFilePath, payload, { mode: 0o600 })
+			log.info("OAuth tokens persisted", { path: this.tokenFilePath })
+		} catch (error) {
+			log.warn("Failed to persist HTB_TOKEN_FILE", { path: this.tokenFilePath, message: error.message })
 		}
 	}
 
@@ -222,21 +323,121 @@ class HtbApiConnector {
 		log.info(`HTB rate limit: ${phase} — ${endpointPath}`, { endpoint, ...meta })
 	}
 
-	async refreshTokenIfNeeded() {
+	async ensureValidToken() {
 		if (!this.checkTokenExpiring(this.API_TOKEN)) return
 
-		if (!this.tokenExpiryWarned) {
-			this.tokenExpiryWarned = true
-			log.warn("HTB_V4_TOKEN is expiring — regenerate it on app.hackthebox.com and restart the bot.")
+		if (!this._tokenRefreshPromise) {
+			this._tokenRefreshPromise = this.refreshSessionToken()
+				.finally(() => { this._tokenRefreshPromise = null })
 		}
 
-		throw new Error("HTB_V4_TOKEN expired. Regenerate it on app.hackthebox.com and restart the bot.")
+		try {
+			await this._tokenRefreshPromise
+		} catch (error) {
+			if (!this.tokenExpiryWarned) {
+				this.tokenExpiryWarned = true
+				log.warn("HTB OAuth refresh failed — re-login on HTB and update HTB_V4_TOKEN + HTB_REFRESH_TOKEN", {
+					message: error.message,
+				})
+			}
+			throw error instanceof HtbAuthError ? error : new HtbAuthError(error.message)
+		}
+	}
+
+	async refreshSessionToken() {
+		if (!this.REFRESH_TOKEN) {
+			throw new HtbAuthError("HTB_REFRESH_TOKEN is missing")
+		}
+
+		const data = await this.htbApiPost("login/refresh", {
+			refresh_token: this.REFRESH_TOKEN,
+		}, { authorized: false })
+
+		const payload = data?.message || data
+		if (!payload?.access_token) {
+			throw new HtbAuthError("HTB refresh failed: no access_token in response")
+		}
+		if (!payload?.refresh_token) {
+			throw new HtbAuthError("HTB refresh failed: no refresh_token in response")
+		}
+
+		this.API_TOKEN = payload.access_token
+		this.REFRESH_TOKEN = payload.refresh_token
+		this.tokenExpiryWarned = false
+		this.persistOAuthTokens()
+		log.info("OAuth session refreshed", { expiresAt: this.getTokenExpiry()?.toISOString() || "unknown" })
+	}
+
+	buildAuthHttpError(response, label) {
+		const status = response?.status
+		const body = response?.body || {}
+		const messageText = typeof body?.message === "string"
+			? body.message
+			: body?.message
+				? JSON.stringify(body.message)
+				: (response?.text || "").slice(0, 200)
+
+		if (status === 401) {
+			return new HtbAuthError(
+				"HTB_REFRESH_TOKEN invalid — re-login on HTB and update HTB_V4_TOKEN + HTB_REFRESH_TOKEN"
+			)
+		}
+
+		return new HtbAuthError(`HTTP ${status} for ${label}${messageText ? `: ${messageText}` : ""}`)
+	}
+
+	async htbApiPost(endpointPath, body, options = {}) {
+		const base = options.base || HTB_API_BASE
+		const url = `${base}/${endpointPath}`
+		const authorized = options.authorized !== false
+
+		return new Promise((resolve, reject) => {
+			let req = request.agent()
+				.post(url)
+				.set({ Accept: "application/json, */*", "Content-Type": "application/json" })
+				.send(body)
+				.timeout({ response: 120000, deadline: 240000 })
+
+			if (authorized && this.API_TOKEN) {
+				req = req.set({ Authorization: "Bearer " + this.API_TOKEN })
+			}
+
+			req.then((response) => {
+				if (response.status >= 400) {
+					const err = this.buildAuthHttpError(response, `POST ${endpointPath}`)
+					err.status = response.status
+					err.response = response
+					return reject(err)
+				}
+
+				if (isHtmlResponse(response.text)) {
+					const err = new Error(`Non-JSON HTML response for POST ${endpointPath}`)
+					err.status = response.status
+					return reject(err)
+				}
+
+				if (typeof response.body === "string" && isHtmlResponse(response.body)) {
+					const err = new Error(`Non-JSON HTML response for POST ${endpointPath}`)
+					err.status = response.status
+					return reject(err)
+				}
+
+				resolve(response.body)
+			}).catch((err) => {
+				log.error(`POST ${endpointPath} failed`, {
+					status: err.status,
+					message: err.message,
+					body: (err.response?.text || "").slice(0, 200),
+				})
+				reject(err)
+			})
+		})
 	}
 
 	async htbApiGet(endpointPath, parseText = false, options = {}) {
 		const base = options.base || HTB_API_BASE
 		const endpoint = getThrottleEndpointKey(endpointPath)
-		await this.refreshTokenIfNeeded()
+		await this.ensureValidToken()
 
 		const url = `${base}/${endpointPath}`
 		const started = Date.now()
@@ -888,7 +1089,7 @@ class HtbApiConnector {
 	checkTokenExpiring(token) {
 		const payload = parseJwt(token)
 		if (!payload?.exp) return true
-		return payload.exp < Math.floor(Date.now() / 1000) + 120
+		return payload.exp < Math.floor(Date.now() / 1000) + TOKEN_EXPIRY_BUFFER_SEC
 	}
 }
 
@@ -909,5 +1110,9 @@ function parseJwt(token) {
 }
 
 module.exports = {
-	HtbApiConnector: HtbApiConnector
+	HtbApiConnector,
+	HtbTokenExpiredError,
+	HtbAuthError,
+	parseJwt,
+	loadOAuthTokensFromFile,
 }

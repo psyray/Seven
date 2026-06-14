@@ -158,16 +158,26 @@ Available to captains and admins:
 
 - `force update` / `refresh team data` — smart sync after roster changes
 
+### HTB OAuth (when sync fails)
+
+- Seven uses OAuth access + refresh tokens (~72h cycle); access renews automatically.
+- If refresh fails, **captains receive a DM** with fix instructions.
+- Re-login on [labs.hackthebox.com](https://labs.hackthebox.com) → DevTools → Network → `login/refresh` → update tokens (see Admin).
+- The bot stays online with cached data until tokens are fixed.
+
 ---
 
 ## Admin commands
 
 Available to admins only:
 
+- `set htb tokens <access_jwt> <refresh>` — hot-reload OAuth pair without restart
 - `clear cache` — wipe memory + full HTB refresh
 - `set status …` — Discord status/activity
 - `setup emoji` / `clear emoji` — HTB custom emoji on guild
 - `parrot on` / `parrot off` — mirror channel messages to admin DM (debug)
+
+Token pair: capture `message.access_token` + `message.refresh_token` from the browser `login/refresh` response. Optional Docker persistence: `HTB_TOKEN_FILE` JSON (updated after each refresh).
 
 See [admin/operations.md](../admin/operations.md) for what these do under the hood.
 

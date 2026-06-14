@@ -159,6 +159,15 @@ function resolveLocalIntent(content, dfResult = null, decodedParams = null) {
 		}
 	}
 
+	const setHtbTokensMatch = text.match(/^set\s+htb\s+tokens\s+([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\s+(\S+)\s*$/i)
+	if (setHtbTokensMatch) {
+		return {
+			intent: "admin.setHtbTokens",
+			parameters: { htbAccessToken: setHtbTokensMatch[1], htbRefreshToken: setHtbTokensMatch[2] },
+			allRequiredParamsPresent: true,
+		}
+	}
+
 	const teamLeaderPhrases = [
 		/who(?:'s| is)\s+(?:the\s+)?(?:number\s*|#\s*|no\.?\s*)?1(?:\s+(?:on|of|in)\s+(?:the\s+)?team)?/,
 		/who(?:'s| is)\s+on\s+top/,

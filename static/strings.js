@@ -236,6 +236,13 @@ function sectionCaptain() {
 - ║   "force update" / "refresh team data"
 - ║   Smart sync: team members + missing deps only.
 - ║   Use after roster changes or stale rankings.
+# ║ HTB OAuth (when sync fails)
+- ║   Seven uses OAuth access + refresh tokens (~72h cycle).
+- ║   Access renews automatically; no manual App Token.
+- ║   If refresh fails, captains get a DM with fix steps.
+- ║   Re-login on labs.hackthebox.com → DevTools → Network
+- ║   → capture login/refresh → update tokens (see Admin).
+- ║   Bot stays online with cached data until tokens are fixed.
 ══╝`
 }
 
@@ -243,6 +250,11 @@ function sectionAdmin() {
 	return `_______  ADMIN ONLY  _______
 
 ══╗
+# ║ HTB OAuth tokens (hot-reload)
+- ║   "set htb tokens <access_jwt> <refresh>"
+- ║   Updates HTB_V4_TOKEN + HTB_REFRESH_TOKEN in memory.
+- ║   No restart if you use this or HTB_TOKEN_FILE (JSON).
+- ║   Pair from labs.hackthebox.com login/refresh response.
 # ║ Cache & sync
 - ║   "clear cache" — wipe memory + full HTB refresh
 # ║ Bot presence

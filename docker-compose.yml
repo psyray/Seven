@@ -37,6 +37,7 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:-change_me}
       PGDATABASE: ${POSTGRES_DB:-seven}
       LOG_DIR: /var/log/sevenbot
+      HTB_TOKEN_FILE: /var/log/sevenbot/htb_tokens.json
     depends_on:
       postgres:
         condition: service_healthy

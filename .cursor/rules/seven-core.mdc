@@ -23,7 +23,7 @@ Node.js (Docker: 20, local: >=16), discord.js v12, DialogFlow, pg-promise, super
 
 ## Rules
 
-1. **v4-only auth** — never reintroduce v3 session/cookie login; use `HTB_V4_TOKEN`
+1. **v4 auth** — `HTB_V4_TOKEN` + `HTB_REFRESH_TOKEN` required; refresh via `labs/api/v4/login/refresh`; no password login, no App Token static without refresh
 2. **Partial sync** — startup must skip cached sections; use `getSectionsNeedingUpdate()` logic
 3. **Null-safe caches** — initialize empty objects as `{}`, guard before `Object.values()`
 4. **Logging** — use `createLogger("name")`, not raw `console.log` for new code in modules

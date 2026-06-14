@@ -38,9 +38,29 @@ const { generateBinaryClockImage } = require("./helpers/binclock")
 const { normalizeChartTerm } = require("./helpers/chart-term.js")
 const { buildMemberProgressChart, buildMemberActivityChart } = require("./helpers/chart-messages.js")
 const { createLogger } = require("./helpers/logger.js")
+const { HtbTokenExpiredError, HtbAuthError } = require("./modules/htb-api.js")
 const { extractTargetNameFromMessage, resolveLocalIntent } = require("./helpers/nlp.js")
 
 const log = createLogger("bot")
+
+let htbAuthFailureNotified = false
+let pendingHtbAuthFailure = null
+
+	process.on("unhandledRejection", (reason) => {
+		if (reason instanceof HtbTokenExpiredError || reason instanceof HtbAuthError) {
+			log.error("Unhandled HTB auth error (crash suppressed)", { message: reason.message })
+			notifyCaptainsOfHtbAuthFailure(reason)
+			return
+		}
+		if (reason?.message?.includes("HTTP 401 for POST login") || reason?.message?.includes("HTB Account")) {
+			log.error("Unhandled HTB login error (crash suppressed)", { message: reason.message })
+			return
+		}
+	log.error("Unhandled promise rejection", {
+		message: reason?.message || String(reason),
+		stack: reason?.stack,
+	})
+})
 
 /*** HANDLE DEVELOPMENT INSTANCE CASE ***/
 
@@ -298,18 +318,198 @@ async function updateDiscordIds(client, guildIdString) {
 }
 
 async function refresh(options = {}) {
-	const updated = await DAT.update(options)
+	try {
+		const updated = await DAT.update(options)
+		syncPusherAuth()
+		if (htbAuthFailureNotified) clearHtbAuthFailureAlert()
+		return updated
+	} catch (error) {
+		if (error instanceof HtbTokenExpiredError || error instanceof HtbAuthError) {
+			await notifyCaptainsOfHtbAuthFailure(error)
+		}
+		throw error
+	}
+}
+
+function syncPusherAuth() {
 	if (HTB_PUSHER_OWNS_SUBSCRIPTION) {
 		HTB_PUSHER_OWNS_SUBSCRIPTION.auth = DAT.V4API.getApiToken()
 	}
-	return updated
+}
+
+function formatHtbAuthError(error) {
+	if (error instanceof HtbTokenExpiredError) {
+		return "HTB access token expired. Update HTB_V4_TOKEN + HTB_REFRESH_TOKEN (or use `seven set htb tokens <access> <refresh>`), then retry."
+	}
+	if (error instanceof HtbAuthError) {
+		return `HTB authentication failed: ${error.message}`
+	}
+	return `HTB refresh failed: ${error.message}. Check sevenbot-error.log.`
+}
+
+function buildHtbAuthFailureAlert(error) {
+	return [
+		"**HTB OAuth refresh failed**",
+		"",
+		formatHtbAuthError(error),
+		"",
+		"Re-login on labs.hackthebox.com, capture a new token pair (DevTools → login/refresh), then update `.env` or run `seven set htb tokens <access> <refresh>`.",
+		"The bot stays online with cached data until tokens are fixed.",
+	].join("\n")
+}
+
+function clearHtbAuthFailureAlert() {
+	htbAuthFailureNotified = false
+	pendingHtbAuthFailure = null
+}
+
+async function notifyCaptains(client, text) {
+	let captainIds = []
+	try {
+		captainIds = JSON.parse(process.env.CAPTAIN_DISCORD_IDS || "[]")
+	} catch (error) {
+		log.warn("Failed to parse CAPTAIN_DISCORD_IDS for HTB auth alert", { message: error.message })
+		return false
+	}
+
+	if (!captainIds.length) {
+		log.warn("CAPTAIN_DISCORD_IDS is empty — HTB auth alert not sent")
+		return false
+	}
+
+	let sent = false
+	for (const captainId of captainIds) {
+		try {
+			const user = await client.users.fetch(captainId)
+			await user.send(text)
+			sent = true
+		} catch (error) {
+			log.warn("Failed to DM captain HTB auth alert", { captainId, message: error.message })
+		}
+	}
+	return sent
+}
+
+function isDiscordClientReady(discordClient) {
+	return Boolean(discordClient?.user)
+}
+
+async function notifyCaptainsOfHtbAuthFailure(error) {
+	if (!(error instanceof HtbTokenExpiredError || error instanceof HtbAuthError)) return
+	if (htbAuthFailureNotified) return
+
+	const text = buildHtbAuthFailureAlert(error)
+	log.error("HTB auth failure — notifying captains", { message: error.message })
+
+	if (!isDiscordClientReady(client)) {
+		pendingHtbAuthFailure = error
+		return
+	}
+
+	try {
+		if (await notifyCaptains(client, text)) {
+			htbAuthFailureNotified = true
+		}
+	} catch (notifyError) {
+		log.warn("Captain HTB auth alert failed", { message: notifyError.message })
+	}
+}
+
+async function notifyAdmins(client, text) {
+	if (DISCORD_ANNOUNCE_CHAN) {
+		try {
+			await DISCORD_ANNOUNCE_CHAN.send(text)
+			return
+		} catch (error) {
+			log.warn("Failed to post admin alert to announce channel", { message: error.message })
+		}
+	}
+
+	let adminIds = []
+	try {
+		adminIds = JSON.parse(process.env.ADMIN_DISCORD_IDS || "[]")
+	} catch (error) {
+		log.warn("Failed to parse ADMIN_DISCORD_IDS for token alert", { message: error.message })
+		return
+	}
+
+	for (const adminId of adminIds) {
+		try {
+			const user = await client.users.fetch(adminId)
+			await user.send(text)
+		} catch (error) {
+			log.warn("Failed to DM admin alert", { adminId, message: error.message })
+		}
+	}
+}
+
+function setupHtbTokenFileWatcher() {
+	const tokenFile = process.env.HTB_TOKEN_FILE
+	if (!tokenFile) return
+
+	const loadTokensFromFile = async () => {
+		try {
+			if (!fs.existsSync(tokenFile)) return
+			const data = JSON.parse(fs.readFileSync(tokenFile, "utf8"))
+			const accessToken = (data.access_token || data.HTB_V4_TOKEN || "").trim()
+			const refreshToken = (data.refresh_token || data.HTB_REFRESH_TOKEN || "").trim()
+			if (!accessToken || !refreshToken) return
+			DAT.V4API.API_TOKEN = accessToken
+			DAT.V4API.REFRESH_TOKEN = refreshToken
+			DAT.V4API.tokenExpiryWarned = false
+			if (DAT.V4API.checkTokenExpiring(accessToken)) {
+				await DAT.V4API.refreshSessionToken()
+			}
+			clearHtbAuthFailureAlert()
+			syncPusherAuth()
+			log.info("HTB OAuth tokens reloaded from file", { path: tokenFile })
+		} catch (error) {
+			log.warn("Failed to reload HTB_TOKEN_FILE", { path: tokenFile, message: error.message })
+		}
+	}
+
+	loadTokensFromFile()
+	fs.watchFile(tokenFile, { interval: 60000 }, loadTokensFromFile)
+	log.info("Watching HTB_TOKEN_FILE for changes", { path: tokenFile })
+}
+
+function startHtbTokenExpiryMonitor(client) {
+	const warnDays = Number(process.env.HTB_TOKEN_EXPIRY_WARN_DAYS) || 1
+	const warnMs = warnDays * 24 * 60 * 60 * 1000
+	let warned = false
+
+	const check = async () => {
+		const expiry = DAT.V4API.getTokenExpiry()
+		if (!expiry) return
+		const msLeft = expiry.getTime() - Date.now()
+		if (msLeft > 0 && msLeft <= warnMs && !warned) {
+			warned = true
+			const text = `HTB access token expires on ${expiry.toUTCString()}. OAuth refresh should renew it automatically; if sync fails, re-login on HTB and update tokens via \`seven set htb tokens <access> <refresh>\`.`
+			log.warn(text)
+			await notifyAdmins(client, text)
+		}
+	}
+
+	check()
+	setInterval(check, 6 * 60 * 60 * 1000)
 }
 
 async function main() {
 	await importDbBackup()
 	
 	DAT.TEAM_STATS.teamFounder = process.env.FOUNDER_HTB_ID
-	await DAT.init()
+	try {
+		await DAT.init()
+		log.info("HTB OAuth session loaded", { expiresAt: DAT.V4API.getTokenExpiry()?.toISOString() || "unknown" })
+	} catch (error) {
+		if (error instanceof HtbTokenExpiredError || error instanceof HtbAuthError) {
+			pendingHtbAuthFailure = error
+			log.error("HTB OAuth init failed — bot continues with cached data", { message: error.message })
+		} else {
+			throw error
+		}
+	}
+	setupHtbTokenFileWatcher()
 	HTB_PUSHER_OWNS_SUBSCRIPTION = new HtbPusherSubscription("97608bf7532e6f0fe898",
 		[
 			{ channel: "owns-channel", event: "display-info" },
@@ -427,6 +627,13 @@ async function main() {
 		console.log("[DISCORD]::: CLIENT READY")
 
 		DISCORD_ANNOUNCE_CHAN = await client.channels.fetch(process.env.DISCORD_ANNOUNCE_CHAN_ID.toString())
+		startHtbTokenExpiryMonitor(client)
+
+		if (pendingHtbAuthFailure) {
+			const pendingError = pendingHtbAuthFailure
+			pendingHtbAuthFailure = null
+			await notifyCaptainsOfHtbAuthFailure(pendingError)
+		}
 	
 		/** Test the Pusher owns functionality */
 		if (DEV_MODE_ON) {
@@ -498,7 +705,10 @@ async function main() {
 	})
 }
 
-main()
+main().catch((error) => {
+	log.error("Seven startup failed", { message: error.message, stack: error.stack })
+	process.exitCode = 1
+})
 
 
 async function sendFlagboardMsg(message) {
@@ -723,16 +933,36 @@ async function forceUpdate(message) {
 			"no prob, i'm on it 🍉",
 			"ok, on it! 🍉") + `\n(${plan})`, false)
 		log.info("Force update requested", { plan })
-		await refresh({ force: true })
-		console.log("Data refresh completed!")
-		DAT.syncDbExportFields()
-		await updateCache().then(SEND.human(message, H.any("hey I finished updating the DB! 😊",
-			"Heyo, the DB update is finished!",
-			"The data has been updated!",
-			"DB update complete!",
-			"Achivement data has been updated. 😊"), false))
+		try {
+			await refresh({ force: true })
+			console.log("Data refresh completed!")
+			DAT.syncDbExportFields()
+			await updateCache().then(SEND.human(message, H.any("hey I finished updating the DB! 😊",
+				"Heyo, the DB update is finished!",
+				"The data has been updated!",
+				"DB update complete!",
+				"Achivement data has been updated. 😊"), false))
+		} catch (error) {
+			log.error("Force update failed", { message: error.message, stack: error.stack })
+			await SEND.human(message, formatHtbAuthError(error), false)
+		}
 	} else {
 		SEND.human(message, `You're not my boss! 🤔\nno can do.\nTry asking <@!${JSON.parse(process.env.ADMIN_DISCORD_IDS)[0]}>!`)
+	}
+}
+
+async function admin_setHtbTokens(message, accessToken, refreshToken) {
+	if (!isAdmin(message.author)) {
+		SEND.human(message, `You're not my boss! 🤔\nno can do.\nTry asking <@!${JSON.parse(process.env.ADMIN_DISCORD_IDS)[0]}>!`)
+		return
+	}
+	try {
+		DAT.V4API.setOAuthTokens(accessToken, refreshToken)
+		clearHtbAuthFailureAlert()
+		syncPusherAuth()
+		await SEND.human(message, `HTB OAuth tokens updated. Access expires: ${DAT.V4API.getTokenExpiry()?.toUTCString() || "unknown"}`, false)
+	} catch (error) {
+		await SEND.human(message, formatHtbAuthError(error), false)
 	}
 }
 
@@ -759,7 +989,7 @@ async function admin_clearCached(message) {
 			})
 		} catch (error) {
 			log.error("Admin cache clear refresh failed", { message: error.message })
-			await SEND.human(message, "Cache cleared in memory but HTB refresh failed. Check sevenbot-error.log and regenerate HTB_V4_TOKEN if needed.", false)
+			await SEND.human(message, formatHtbAuthError(error), false)
 		}
 	} else {
 		SEND.human(message, `You're not my boss! 🤔\nno can do.\nTry asking <@!${JSON.parse(process.env.ADMIN_DISCORD_IDS)[0]}>!`)
@@ -813,10 +1043,11 @@ async function handleMessage(message) {
 					try {
 						switch (job) {
 						case "help": sendHelpMsg(message); break
-						case "admin.forceUpdateData": forceUpdate(message); break
+						case "admin.forceUpdateData": await forceUpdate(message); break
+						case "admin.setHtbTokens": await admin_setHtbTokens(message, P.htbAccessToken || P.accessToken, P.htbRefreshToken || P.refreshToken); break
 						case "admin.passthruOn": if (isAdmin(message.author)) { SEND.human(message, `Parrot mode ${F.STL("ON", "bs")}. 🦜`); SEND.passthruOn() } else { SEND.human(message, "Sorry, not for you. 🦜") } break
 						case "admin.passthruOff": if (isAdmin(message.author)) { SEND.human(message, `Parrot mode ${F.STL("OFF", "bs")}. 🦜`); SEND.passthruOff() } else { SEND.human(message, "Sorry, not for you. 🦜") } break
-						case "admin.clearCached": admin_clearCached(message); break
+						case "admin.clearCached": await admin_clearCached(message); break
 						case "admin.setStatus": admin_setStatus(message, inf); break
 						case "admin.clearEmoji": E.clearCustEmoji(client).then(SEND.human(message, "Successfully purged Seven-related emoji from supporting channel.", false)); break
 						case "admin.setupEmoji": E.initCustEmoji(client).then(SEND.human(message, "Successfully initialized Seven-related emoji on supporting channel.", false)); break

@@ -72,6 +72,14 @@ seven parrot off
 
 Relays channel messages to the first admin's DM — useful for debugging what users send. Off by default.
 
+### Set HTB OAuth tokens (admin)
+
+```
+seven set htb tokens eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... def50200...
+```
+
+Hot-reloads both tokens in memory without restart. Also persists to `HTB_TOKEN_FILE` when configured.
+
 ## Sync behaviour (automatic)
 
 | Trigger | Mode | Description |
@@ -85,15 +93,18 @@ Section order: `machines → specials → tags → team → challenges`
 
 ## HTB token maintenance
 
-The `HTB_V4_TOKEN` App Token **does not auto-refresh**.
+Seven uses OAuth access/refresh tokens. The access token (~72h) is renewed automatically before expiry.
 
-When expired:
+When refresh fails (`HTB_REFRESH_TOKEN invalid`):
 
-1. Generate a new token on [app.hackthebox.com](https://app.hackthebox.com)
-2. Update `HTB_V4_TOKEN` in `.env`
-3. `npm run docker:restart`
+1. Re-login on [labs.hackthebox.com](https://labs.hackthebox.com) in a browser
+2. Capture a new pair from DevTools → Network → `login/refresh`
+3. Update `.env`, **or** write to `HTB_TOKEN_FILE`, **or** run in Discord: `seven set htb tokens <access> <refresh>`
+4. Restart only if you edited `.env` directly: `npm run docker:restart`
 
-Symptoms: `Non-JSON HTML response` in `sevenbot-error.log`, bot stops answering HTB queries.
+Proactive warnings are sent to `DISCORD_ANNOUNCE_CHAN_ID` when access expiry is within `HTB_TOKEN_EXPIRY_WARN_DAYS` (default 1).
+
+Symptoms: `HTB_REFRESH_TOKEN invalid` or `Non-JSON HTML response` in `sevenbot-error.log`, sync commands fail but the bot stays online and cache queries still work.
 
 ## Docker operations
 
