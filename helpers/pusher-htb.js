@@ -61,9 +61,11 @@ function encodeLinks(msg) {
 }
 
 function extractUid(links) {
-	if (!links.length) return null
-	const match = links[0].href.match(/(?:profile|users)\/(\d+)/)
-	return match ? ~~match[1] : null
+	for (const link of links) {
+		const match = link.href.match(/(?:profile|users)\/(\d+)/i)
+		if (match) return ~~match[1]
+	}
+	return null
 }
 
 function extractTargetFromLinks(links) {
@@ -97,6 +99,11 @@ function extractMachineFlag(msg, lemmas, isBlood, plainText = "") {
 		const bloodParts = afterBlood.trim().split(/\s+/).filter(Boolean)
 		const bloodFlag = bloodParts[0] || msg.childNodes[3]?.textContent?.trim().split(" ")?.[1]
 		return ["root", "system"].includes(bloodFlag) ? "root" : "user"
+	}
+	const ownedMatch = plainText.match(/\bowned\s+(user|root|system)\b/i)
+	if (ownedMatch) {
+		const flag = ownedMatch[1].toLowerCase()
+		return flag === "system" ? "root" : flag
 	}
 	if (lemmas.length > 1) {
 		let flag = lemmas[1]
@@ -249,6 +256,8 @@ class HtbPusherSubscription extends EventEmitter {
 
 	constructor(apiToken, bindings, bearerToken) {
 		super()
+		this.apiToken = apiToken
+		this.bindings = bindings
 		this.bearerToken = bearerToken
 		this.client = new Pusher(apiToken, {
 			authEndpoint: `${HTB_APP_BASE}/pusher/auth`,
@@ -258,13 +267,32 @@ class HtbPusherSubscription extends EventEmitter {
 			encrypted: true
 		})
 		this.channels = []
+		this._bindChannels(bindings)
+
+		log.info("Pusher client initialized", { authEndpoint: `${HTB_APP_BASE}/pusher/auth` })
+		this.client.connection.bind("state_change", (states) => {
+			log.info(`Client state changed from ${states.previous} to ${states.current}`)
+			if (states.current === "connected" && states.previous === "disconnected") {
+				this._resubscribeChannels()
+			}
+			this.emit("state_change", states)
+		})
+	}
+
+	_bindChannels(bindings) {
 		for (let i = 0; i < bindings.length; i++) {
 			const binding = bindings[i]
 			var channel = this.client.subscribe(binding.channel)
+			channel.bind("pusher:subscription_succeeded", () => {
+				log.info("Pusher channel subscribed", { channel: binding.channel })
+			})
+			channel.bind("pusher:subscription_error", (status) => {
+				log.error("Pusher channel subscription failed", { channel: binding.channel, status })
+			})
 			channel.bind(binding.event,
 				(data) => {
 					try {
-						this.alertSeven(parsePusherEvent(data, {channel:binding.channel, event: binding.event}))
+						this.alertSeven(parsePusherEvent(data, { channel: binding.channel, event: binding.event }))
 					} catch (error) {
 						log.error("Pusher bind handler failed", { message: error.message })
 					}
@@ -272,12 +300,19 @@ class HtbPusherSubscription extends EventEmitter {
 			)
 			this.channels.push(channel)
 		}
-		
-		log.info("Pusher client initialized", { authEndpoint: `${HTB_APP_BASE}/pusher/auth` })
-		this.client.connection.bind("state_change", (states) => {
-			log.info(`Client state changed from ${states.previous} to ${states.current}`)
-			this.emit("state_change", states)
-		})
+	}
+
+	_resubscribeChannels() {
+		try {
+			for (const binding of this.bindings) {
+				this.client.unsubscribe(binding.channel)
+			}
+			this.channels = []
+			this._bindChannels(this.bindings)
+			log.debug("Pusher channels resubscribed after reconnect")
+		} catch (error) {
+			log.warn("Pusher resubscribe failed", { message: error.message })
+		}
 	}
 
 	/**
@@ -286,7 +321,14 @@ class HtbPusherSubscription extends EventEmitter {
    */
 	alertSeven(message) {
 		if (message) {
-			log.debug("Pusher event received", { uid: message.uid, type: message.type, target: message.target, channel: message.channel })
+			log.info("Pusher event received", {
+				uid: message.uid,
+				type: message.type,
+				target: message.target,
+				flag: message.flag,
+				blood: message.blood,
+				channel: message.channel,
+			})
 			this.emit("pusherevent", message)
 		}
 	}

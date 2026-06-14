@@ -47,6 +47,27 @@ class NotificationRouter {
 		this.pusherDisconnectedAt = null
 		this.pusherDisconnectTimer = null
 		this.pusherAdminAlertSent = false
+		/** Owns already posted to Discord (independent of HTB cache / force-update). */
+		this.announcedOwnKeys = new Set()
+		this.lastFallbackPollStats = null
+	}
+
+	ownAnnouncementKey(message) {
+		return [
+			message?.uid,
+			message?.type,
+			message?.target,
+			message?.flag,
+			message?.blood ? "blood" : "",
+		].join("|")
+	}
+
+	markOwnAnnounced(message) {
+		this.announcedOwnKeys.add(this.ownAnnouncementKey(message))
+	}
+
+	isOwnAlreadyAnnounced(message) {
+		return this.announcedOwnKeys.has(this.ownAnnouncementKey(message))
 	}
 
 	refreshConfig() {
@@ -55,6 +76,9 @@ class NotificationRouter {
 
 	setAnnounceChannelReady() {
 		this.flushQueue()
+		this.pollTeamActivityFallback().catch(error => {
+			log.warn("Initial activity fallback poll failed", { message: error.message })
+		})
 	}
 
 	recordEvent(message, note = null) {
@@ -172,10 +196,38 @@ class NotificationRouter {
 
 	async handleOwnEvent(message) {
 		if (!this.shouldAnnounceOwn(message) || !this.matchesOwnConfig(message)) {
+			const reason = !this.shouldAnnounceOwn(message)
+				? "not team member, discord link, or blood"
+				: "filtered by PUSHER_ANNOUNCE_* config"
+			log.info("Pusher own skipped", {
+				uid: message.uid,
+				type: message.type,
+				target: message.target,
+				flag: message.flag,
+				reason,
+			})
+			this.recordEvent(message, `skipped: ${reason}`)
 			return
 		}
 
 		const member = await this.dat.resolveEnt(message.uid, "member", true, null, true)
+		const resolveType = message.type === "starting_point" ? "machine" : message.type
+		const targetEntity = this.dat.resolveEnt(message.target, resolveType)
+		if (!member) {
+			log.warn("Own announce skipped — member not resolved", { uid: message.uid, target: message.target })
+			this.recordEvent(message, "skipped: member not resolved")
+			return
+		}
+		if (!targetEntity) {
+			log.warn("Own announce skipped — target not in cache", {
+				uid: message.uid,
+				target: message.target,
+				type: message.type,
+			})
+			this.recordEvent(message, "skipped: target not in cache")
+			return
+		}
+
 		const { mentionText, mentionUserIds } = this.getMentionPayload(message.uid)
 		const embed = this.embeds.pusherOwn(
 			member,
@@ -186,7 +238,25 @@ class NotificationRouter {
 			mentionText
 		)
 
-		await this.sendAnnouncement({ embed, mentionUserIds })
+		const sent = await this.sendAnnouncement({ embed, mentionUserIds })
+		if (!sent) {
+			log.warn("Own announce failed — Discord send returned false", {
+				uid: message.uid,
+				target: message.target,
+				type: message.type,
+			})
+			this.recordEvent(message, "skipped: discord send failed")
+			return
+		}
+
+		this.markOwnAnnounced(message)
+		log.info("Own announced to Discord", {
+			uid: message.uid,
+			target: message.target,
+			type: message.type,
+			flag: message.flag,
+			source: message.channel,
+		})
 		this.recordEvent(message, "announced own")
 
 		if (message.blood) {
@@ -305,6 +375,8 @@ class NotificationRouter {
 				this.catchUpRecentActivity().catch(error => {
 					log.warn("Pusher reconnect catch-up failed", { message: error.message })
 				})
+			} else if (downMs > 0) {
+				log.debug("Pusher reconnect was brief — skipping API catch-up", { downMs })
 			}
 			return
 		}
@@ -352,7 +424,7 @@ class NotificationRouter {
 	}
 
 	normalizeMemberActivityItem(entry, uid) {
-		const objectType = entry.object_type
+		const objectType = String(entry.object_type || "").toLowerCase()
 		const targetName = entry.name
 		if (!uid || !objectType || !targetName) return null
 
@@ -361,7 +433,7 @@ class NotificationRouter {
 
 		if (objectType === "machine") {
 			type = "machine"
-			flag = entry.type === "root" ? "root" : "user"
+			flag = String(entry.type || "").toLowerCase() === "root" ? "root" : "user"
 		} else if (objectType === "challenge") {
 			type = "challenge"
 			flag = "challenge"
@@ -382,17 +454,10 @@ class NotificationRouter {
 		}
 	}
 
-	isNewMemberActivity(uid, normalized) {
-		const member = this.dat.TEAM_MEMBERS?.[uid]
-		if (!member?.activity?.length) {
-			return normalized.time > this.fallbackWatermark
-		}
-		return !member.activity.some((own) =>
-			(own.name === normalized.target || own.id == normalized.target)
-			&& own.object_type === (normalized.type === "starting_point" ? "machine" : normalized.type)
-			&& (own.type === normalized.flag || own.type === normalized.type)
-			&& Math.abs(Date.parse(own.date) - normalized.time) < 120000
-		) && normalized.time > this.fallbackWatermark - 120000
+	shouldProcessFallbackActivity(normalized) {
+		if (this.isOwnAlreadyAnnounced(normalized)) return false
+		if (normalized.time <= this.fallbackWatermark) return false
+		return true
 	}
 
 	async fetchRecentMemberActivity(sinceMs) {
@@ -404,14 +469,24 @@ class NotificationRouter {
 	}
 
 	async processFallbackActivityItems(items) {
+		let announced = 0
+		let skipped = 0
 		for (const item of items) {
 			const uid = item.user_id
 			const normalized = this.normalizeMemberActivityItem(item, uid)
-			if (!normalized || !this.isTeamMember(normalized.uid)) continue
-			if (!this.isNewMemberActivity(normalized.uid, normalized)) continue
+			if (!normalized || !this.isTeamMember(normalized.uid)) {
+				skipped++
+				continue
+			}
+			if (!this.shouldProcessFallbackActivity(normalized)) {
+				skipped++
+				continue
+			}
 			await this.handleOwnEvent(normalized)
 			this.fallbackWatermark = Math.max(this.fallbackWatermark, normalized.time)
+			announced++
 		}
+		return { announced, skipped, total: items.length }
 	}
 
 	async catchUpRecentActivity() {
@@ -427,13 +502,19 @@ class NotificationRouter {
 	}
 
 	async pollTeamActivityFallback() {
-		if (this.pusherHealthy) return
-
 		this.lastFallbackPollAt = new Date().toISOString()
 		try {
-			const items = await this.fetchRecentMemberActivity(this.fallbackWatermark)
+			const lookbackMs = Math.max(this.config.fallbackPollMs, 15 * 60 * 1000)
+			const sinceMs = Date.now() - lookbackMs
+			const items = await this.fetchRecentMemberActivity(sinceMs)
 			this.lastFallbackError = null
-			await this.processFallbackActivityItems(items)
+			const stats = await this.processFallbackActivityItems(items)
+			this.lastFallbackPollStats = stats
+			log.info("Activity fallback poll completed", {
+				...stats,
+				pusherHealthy: this.pusherHealthy,
+				sinceMs: new Date(sinceMs).toISOString(),
+			})
 		} catch (error) {
 			this.lastFallbackError = error.message
 			log.warn("Member activity fallback poll failed", { message: error.message })
@@ -456,6 +537,7 @@ class NotificationRouter {
 			queueSize: this.pendingQueue.length,
 			lastEvents: this.lastEvents.slice(0, 8),
 			lastFallbackPollAt: this.lastFallbackPollAt,
+			lastFallbackPollStats: this.lastFallbackPollStats,
 			lastFallbackError: this.lastFallbackError,
 			config: this.config,
 		})

@@ -1045,14 +1045,18 @@ class HtbEmbeds {
 			`**Pusher state:** \`${status.pusherState}\` (${status.pusherHealthy ? "healthy" : "degraded"})`,
 			`**Queued announces:** ${status.queueSize}`,
 			`**Fallback poll:** ${status.lastFallbackPollAt || "never"}${status.lastFallbackError ? ` (last error: ${status.lastFallbackError})` : ""}`,
-			"",
-			"**Recent events:**",
 		]
+		if (status.lastFallbackPollStats) {
+			const s = status.lastFallbackPollStats
+			lines.push(`**Last poll:** ${s.announced} announced, ${s.skipped} skipped, ${s.total} API items`)
+		}
+		lines.push("", "**Recent events:**")
 		if (!status.lastEvents?.length) {
 			lines.push("_No Pusher events recorded yet._")
 		} else {
 			status.lastEvents.forEach(evt => {
-				lines.push(`• \`${evt.at}\` ${evt.type || "?"} ${evt.target || ""}${evt.blood ? " 🩸" : ""}`)
+				const note = evt.note ? ` (${evt.note})` : ""
+				lines.push(`• \`${evt.at}\` ${evt.type || "?"} ${evt.target || ""}${evt.blood ? " 🩸" : ""}${note}`)
 			})
 		}
 		return this.PUSHER_BASE

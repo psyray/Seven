@@ -181,8 +181,16 @@ const OPTIONAL_MEMBER_PROFILE_PATH_PREFIXES = [
 	"user/profile/progress/machines/os/",
 ]
 
-function isOptionalMemberProfilePath(endpointPath) {
-	return OPTIONAL_MEMBER_PROFILE_PATH_PREFIXES.some(prefix => endpointPath.startsWith(prefix))
+function extractMemberActivityFromResponse(res) {
+	const profile = res?.profile || res?.message?.profile || res?.data?.profile || res?.message
+	const activity = profile?.activity || res?.activity || res?.message?.activity || res?.data?.activity
+	return Array.isArray(activity) ? activity : []
+}
+
+function parseActivityTimestamp(entry) {
+	const raw = entry?.date || entry?.created_at || entry?.updated_at
+	if (!raw) return NaN
+	return Date.parse(raw)
 }
 
 function loadOAuthTokensFromFile(filePath) {
@@ -1042,8 +1050,8 @@ class HtbApiConnector {
 		const results = await Promise.all(memberIds.map(async (id) => {
 			try {
 				const res = await this.getMemberActivity(id)
-				const activity = res?.profile?.activity || res?.activity || []
-				return { id: Number(id), activity: Array.isArray(activity) ? activity : [] }
+				const activity = extractMemberActivityFromResponse(res)
+				return { id: Number(id), activity }
 			} catch (error) {
 				if (error.status === 401 || error.status === 403) {
 					error.endpoint = `user/profile/activity/${id}`
@@ -1057,9 +1065,19 @@ class HtbApiConnector {
 		const items = []
 		for (const { id, activity } of results) {
 			for (const entry of activity) {
-				const ts = Date.parse(entry.date || entry.created_at || entry.updated_at)
-				if (sinceMs && (!Number.isFinite(ts) || ts <= sinceMs)) continue
-				items.push({ ...entry, user_id: id, _activityTs: ts || Date.now() })
+				const ts = parseActivityTimestamp(entry)
+				if (sinceMs) {
+					if (Number.isFinite(ts)) {
+						if (ts <= sinceMs) continue
+					} else {
+						log.debug("Activity entry has no parseable date — including in fallback scan", {
+							memberId: id,
+							name: entry?.name,
+							object_type: entry?.object_type,
+						})
+					}
+				}
+				items.push({ ...entry, user_id: id, _activityTs: Number.isFinite(ts) ? ts : Date.now() })
 			}
 		}
 		return items.sort((a, b) => b._activityTs - a._activityTs)
