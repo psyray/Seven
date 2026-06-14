@@ -11,6 +11,11 @@ const OWN_TYPES = new Set([
 	"machine", "challenge", "endgame", "fortress", "prolab", "starting_point",
 ])
 
+/** Ignore brief Pusher websocket blips shorter than this. */
+const PUSHER_CATCHUP_MIN_DOWN_MS = 15000
+/** Alert admins only if Pusher stays unhealthy this long. */
+const PUSHER_DISCONNECT_ALERT_MS = 60000
+
 class NotificationRouter {
 	/**
 	 * @param {object} options
@@ -39,6 +44,9 @@ class NotificationRouter {
 		this.pusherHealthy = true
 		this.lastFallbackPollAt = null
 		this.lastFallbackError = null
+		this.pusherDisconnectedAt = null
+		this.pusherDisconnectTimer = null
+		this.pusherAdminAlertSent = false
 	}
 
 	refreshConfig() {
@@ -280,71 +288,155 @@ class NotificationRouter {
 
 	onPusherStateChange(states, client) {
 		this.pusherState = states.current
-		const unhealthy = ["disconnected", "failed", "unavailable"].includes(states.current)
-		if (unhealthy && this.pusherHealthy) {
+
+		if (states.current === "connected") {
+			this._clearPusherDisconnectTimer()
+			const downMs = this.pusherDisconnectedAt ? Date.now() - this.pusherDisconnectedAt : 0
+			this.pusherDisconnectedAt = null
+			const wasUnhealthy = !this.pusherHealthy
+			this.pusherHealthy = true
+			this.pusherAdminAlertSent = false
+
+			if (wasUnhealthy || downMs >= 5000) {
+				log.info("Pusher connection restored", { downMs, wasUnhealthy })
+			}
+
+			if (downMs >= PUSHER_CATCHUP_MIN_DOWN_MS) {
+				this.catchUpRecentActivity().catch(error => {
+					log.warn("Pusher reconnect catch-up failed", { message: error.message })
+				})
+			}
+			return
+		}
+
+		if (states.current === "failed" || states.current === "unavailable") {
 			this.pusherHealthy = false
 			log.warn("Pusher connection unhealthy", { previous: states.previous, current: states.current })
-			this.notifyAdmins?.(client, `Seven Pusher connection is **${states.current}**. Live own announcements may be delayed; API fallback polling is active.`)
+			this._notifyPusherAdminOnce(client, states.current)
+			return
 		}
-		if (states.current === "connected" && !this.pusherHealthy) {
-			this.pusherHealthy = true
-			log.info("Pusher connection restored")
-			this.catchUpRecentActivity().catch(error => {
-				log.warn("Pusher reconnect catch-up failed", { message: error.message })
-			})
+
+		if (states.current === "disconnected" || states.current === "connecting") {
+			if (!this.pusherDisconnectedAt) {
+				this.pusherDisconnectedAt = Date.now()
+			}
+			this._schedulePusherDisconnectAlert(client)
 		}
 	}
 
-	normalizeTeamActivityItem(item) {
-		const uid = item.user_id || item.user?.id || item.id
-		const objectType = item.object_type || item.type
-		const targetName = item.name || item.machine_name || item.challenge_name
+	_clearPusherDisconnectTimer() {
+		if (this.pusherDisconnectTimer) {
+			clearTimeout(this.pusherDisconnectTimer)
+			this.pusherDisconnectTimer = null
+		}
+	}
+
+	_schedulePusherDisconnectAlert(client) {
+		if (this.pusherDisconnectTimer) return
+		this.pusherDisconnectTimer = setTimeout(() => {
+			this.pusherDisconnectTimer = null
+			if (this.pusherState === "connected") return
+			this.pusherHealthy = false
+			log.warn("Pusher connection unhealthy (sustained)", { state: this.pusherState })
+			this._notifyPusherAdminOnce(client, this.pusherState)
+		}, PUSHER_DISCONNECT_ALERT_MS)
+	}
+
+	_notifyPusherAdminOnce(client, state) {
+		if (this.pusherAdminAlertSent) return
+		this.pusherAdminAlertSent = true
+		this.notifyAdmins?.(
+			client,
+			`Seven Pusher connection is **${state}**. Live own announcements may be delayed; member-activity API fallback is active.`
+		)
+	}
+
+	normalizeMemberActivityItem(entry, uid) {
+		const objectType = entry.object_type
+		const targetName = entry.name
 		if (!uid || !objectType || !targetName) return null
+
+		let type = objectType
+		let flag = entry.type
+
+		if (objectType === "machine") {
+			type = "machine"
+			flag = entry.type === "root" ? "root" : "user"
+		} else if (objectType === "challenge") {
+			type = "challenge"
+			flag = "challenge"
+		} else if (["endgame", "fortress", "prolab"].includes(objectType)) {
+			type = objectType
+			flag = entry.flag_title || objectType
+		}
+
+		const time = entry._activityTs || Date.parse(entry.date || entry.created_at) || Date.now()
 		return {
 			uid: Number(uid),
-			time: Date.parse(item.date || item.created_at || item.updated_at) || Date.now(),
-			type: objectType === "machine" && item.type === "user" ? "machine" : objectType,
+			time,
+			type,
 			target: targetName,
-			flag: item.type === "user" || item.type === "root" ? item.type
-				: item.type === "challenge" ? "challenge"
-					: item.flag_title || item.type,
+			flag,
 			blood: false,
-			channel: "team-activity-fallback",
+			channel: "member-activity-fallback",
+		}
+	}
+
+	isNewMemberActivity(uid, normalized) {
+		const member = this.dat.TEAM_MEMBERS?.[uid]
+		if (!member?.activity?.length) {
+			return normalized.time > this.fallbackWatermark
+		}
+		return !member.activity.some((own) =>
+			(own.name === normalized.target || own.id == normalized.target)
+			&& own.object_type === (normalized.type === "starting_point" ? "machine" : normalized.type)
+			&& (own.type === normalized.flag || own.type === normalized.type)
+			&& Math.abs(Date.parse(own.date) - normalized.time) < 120000
+		) && normalized.time > this.fallbackWatermark - 120000
+	}
+
+	async fetchRecentMemberActivity(sinceMs) {
+		const memberIds = Object.keys(this.dat.TEAM_MEMBERS || {}).map(Number)
+		if (!memberIds.length || !this.dat.V4API?.getRecentMemberActivities) {
+			return []
+		}
+		return this.dat.V4API.getRecentMemberActivities(memberIds, sinceMs)
+	}
+
+	async processFallbackActivityItems(items) {
+		for (const item of items) {
+			const uid = item.user_id
+			const normalized = this.normalizeMemberActivityItem(item, uid)
+			if (!normalized || !this.isTeamMember(normalized.uid)) continue
+			if (!this.isNewMemberActivity(normalized.uid, normalized)) continue
+			await this.handleOwnEvent(normalized)
+			this.fallbackWatermark = Math.max(this.fallbackWatermark, normalized.time)
 		}
 	}
 
 	async catchUpRecentActivity() {
-		const teamId = this.getTeamId()
-		if (!teamId || !this.dat.V4API?.getRecentTeamActivity) return
 		const since = Date.now() - (15 * 60 * 1000)
-		const items = await this.dat.V4API.getRecentTeamActivity(teamId, since)
-		for (const item of items) {
-			const normalized = this.normalizeTeamActivityItem(item)
-			if (!normalized || !this.isTeamMember(normalized.uid)) continue
-			if (normalized.time <= this.fallbackWatermark) continue
-			await this.handleOwnEvent(normalized)
+		try {
+			const items = await this.fetchRecentMemberActivity(since)
+			await this.processFallbackActivityItems(items)
+			this.lastFallbackError = null
+		} catch (error) {
+			this.lastFallbackError = error.message
+			throw error
 		}
-		this.fallbackWatermark = Date.now()
 	}
 
 	async pollTeamActivityFallback() {
 		if (this.pusherHealthy) return
-		const teamId = this.getTeamId()
-		if (!teamId || !this.dat.V4API?.getRecentTeamActivity) return
 
 		this.lastFallbackPollAt = new Date().toISOString()
 		try {
-			const items = await this.dat.V4API.getRecentTeamActivity(teamId, this.fallbackWatermark)
+			const items = await this.fetchRecentMemberActivity(this.fallbackWatermark)
 			this.lastFallbackError = null
-			for (const item of items) {
-				const normalized = this.normalizeTeamActivityItem(item)
-				if (!normalized || !this.isTeamMember(normalized.uid)) continue
-				await this.handleOwnEvent(normalized)
-				this.fallbackWatermark = Math.max(this.fallbackWatermark, normalized.time)
-			}
+			await this.processFallbackActivityItems(items)
 		} catch (error) {
 			this.lastFallbackError = error.message
-			log.warn("Team activity fallback poll failed", { message: error.message })
+			log.warn("Member activity fallback poll failed", { message: error.message })
 		}
 	}
 

@@ -123,11 +123,13 @@ Table `seven_data`: JSON columns per entity type.
 
 ## Real-time notifications (fallback API)
 
-When Pusher is unhealthy, `NotificationRouter` polls:
+When Pusher is unhealthy, `NotificationRouter` polls member activity via:
 
-- `GET team/activity/{teamId}` via `HtbApiConnector.getRecentTeamActivity(teamId, sinceMs)`
+- `user/profile/activity/{memberId}` through `HtbApiConnector.getRecentMemberActivities()`
 
-Used for catch-up on reconnect and periodic fallback (`PUSHER_FALLBACK_POLL_MS`). Live owns still come primarily from Pusher (`helpers/pusher-htb.js`).
+Note: `GET team/activity/{teamId}` often returns **401** with OAuth v4 tokens — do not use it for fallback.
+
+Used for catch-up after sustained disconnect (≥15s) and periodic fallback (`PUSHER_FALLBACK_POLL_MS`). Live owns still come primarily from Pusher (`helpers/pusher-htb.js`).
 
 See [Pusher event formats](pusher-events.md) and [user notifications](../user/notifications.md).
 
