@@ -25,14 +25,16 @@ class NotificationRouter {
 	 * @param {Function} options.updateCache
 	 * @param {Function} options.notifyAdmins
 	 * @param {Function} [options.getTeamId]
+	 * @param {import("./notification-store.js").NotificationStore} [options.notificationStore]
 	 */
-	constructor({ dat, embeds, getAnnounceChannel, updateCache, notifyAdmins, getTeamId }) {
+	constructor({ dat, embeds, getAnnounceChannel, updateCache, notifyAdmins, getTeamId, notificationStore }) {
 		this.dat = dat
 		this.embeds = embeds
 		this.getAnnounceChannel = getAnnounceChannel
 		this.updateCache = updateCache
 		this.notifyAdmins = notifyAdmins
 		this.getTeamId = getTeamId || (() => dat.TEAM_STATS?.id)
+		this.notificationStore = notificationStore || null
 		this.config = getPusherNotificationConfig()
 		this.pendingQueue = []
 		this.lastEvents = []
@@ -81,8 +83,17 @@ class NotificationRouter {
 		})
 	}
 
-	recordEvent(message, note = null) {
-		this.lastEvents.unshift({
+	async initFromStore() {
+		if (!this.notificationStore) return
+		const recent = await this.notificationStore.loadRecentIntoMemory(25)
+		if (recent.length) {
+			this.lastEvents = recent
+		}
+	}
+
+	async recordEvent(message, note = null) {
+		const member = message?.uid ? this.dat.getMemberById?.(message.uid) : null
+		const entry = {
 			at: new Date().toISOString(),
 			uid: message?.uid,
 			type: message?.type,
@@ -91,7 +102,33 @@ class NotificationRouter {
 			blood: message?.blood,
 			channel: message?.channel,
 			note,
-		})
+		}
+
+		if (this.notificationStore) {
+			try {
+				const isAnnounced = typeof note === "string" && (note.startsWith("announced") || note.startsWith("reposted"))
+				const id = await this.notificationStore.append({
+					event_at: message?.time ? new Date(message.time) : new Date(),
+					uid: message?.uid ?? null,
+					member_name: member?.name || null,
+					event_type: message?.type || null,
+					target: message?.target || null,
+					flag: message?.flag || null,
+					blood: Boolean(message?.blood),
+					channel: message?.channel || null,
+					source: message?.channel || null,
+					note,
+					announced: isAnnounced,
+					announced_at: isAnnounced ? new Date() : null,
+				})
+				entry.id = id
+				if (message) message._dbId = id
+			} catch (error) {
+				log.warn("Failed to persist notification event", { message: error.message })
+			}
+		}
+
+		this.lastEvents.unshift(entry)
 		if (this.lastEvents.length > 25) {
 			this.lastEvents.length = 25
 		}
@@ -113,7 +150,11 @@ class NotificationRouter {
 		try {
 			let sent
 			if (payload.embed) {
-				sent = await channel.send(payload.embed, options)
+				const sendOptions = { embed: payload.embed }
+				if (options.allowedMentions) {
+					sendOptions.allowedMentions = options.allowedMentions
+				}
+				sent = await channel.send(sendOptions)
 			} else if (payload.content) {
 				sent = await channel.send(payload.content, options)
 			}
@@ -194,20 +235,24 @@ class NotificationRouter {
 		return true
 	}
 
-	async handleOwnEvent(message) {
-		if (!this.shouldAnnounceOwn(message) || !this.matchesOwnConfig(message)) {
-			const reason = !this.shouldAnnounceOwn(message)
-				? "not team member, discord link, or blood"
-				: "filtered by PUSHER_ANNOUNCE_* config"
-			log.info("Pusher own skipped", {
-				uid: message.uid,
-				type: message.type,
-				target: message.target,
-				flag: message.flag,
-				reason,
-			})
-			this.recordEvent(message, `skipped: ${reason}`)
-			return
+	async handleOwnEvent(message, { forceRepost = false } = {}) {
+		if (!forceRepost) {
+			if (!this.shouldAnnounceOwn(message) || !this.matchesOwnConfig(message)) {
+				const reason = !this.shouldAnnounceOwn(message)
+					? "not team member, discord link, or blood"
+					: "filtered by PUSHER_ANNOUNCE_* config"
+				log.info("Pusher own skipped", {
+					uid: message.uid,
+					type: message.type,
+					target: message.target,
+					flag: message.flag,
+					reason,
+				})
+				await this.recordEvent(message, `skipped: ${reason}`)
+				return { ok: false, reason }
+			}
+		} else if (!this.isTeamMember(message.uid) && !message.blood && !this.dat.DISCORD_LINKS?.[message.uid]) {
+			return { ok: false, reason: "not_team_member" }
 		}
 
 		const member = await this.dat.resolveEnt(message.uid, "member", true, null, true)
@@ -215,8 +260,8 @@ class NotificationRouter {
 		const targetEntity = this.dat.resolveEnt(message.target, resolveType)
 		if (!member) {
 			log.warn("Own announce skipped — member not resolved", { uid: message.uid, target: message.target })
-			this.recordEvent(message, "skipped: member not resolved")
-			return
+			await this.recordEvent(message, "skipped: member not resolved")
+			return { ok: false, reason: "member_not_resolved" }
 		}
 		if (!targetEntity) {
 			log.warn("Own announce skipped — target not in cache", {
@@ -224,8 +269,8 @@ class NotificationRouter {
 				target: message.target,
 				type: message.type,
 			})
-			this.recordEvent(message, "skipped: target not in cache")
-			return
+			await this.recordEvent(message, "skipped: target not in cache")
+			return { ok: false, reason: "target_not_in_cache" }
 		}
 
 		const { mentionText, mentionUserIds } = this.getMentionPayload(message.uid)
@@ -245,50 +290,57 @@ class NotificationRouter {
 				target: message.target,
 				type: message.type,
 			})
-			this.recordEvent(message, "skipped: discord send failed")
-			return
+			await this.recordEvent(message, "skipped: discord send failed")
+			return { ok: false, reason: "discord_send_failed" }
 		}
 
-		this.markOwnAnnounced(message)
+		if (!forceRepost) {
+			this.markOwnAnnounced(message)
+		}
 		log.info("Own announced to Discord", {
 			uid: message.uid,
 			target: message.target,
 			type: message.type,
 			flag: message.flag,
 			source: message.channel,
+			forceRepost,
 		})
-		this.recordEvent(message, "announced own")
+		await this.recordEvent(message, forceRepost ? "reposted own" : "announced own")
 
-		if (message.blood) {
-			this.dat.integratePusherBlood(
-				member,
-				message.uid,
-				message.time,
-				message.type,
-				message.target,
-				message.flag,
-				true
-			)
-			this.dat.incrementTeamStatsFromOwn?.(message.flag, message.type, true)
-			for (let i = 0; i < 3; i++) {
-				await this.sendAnnouncement({ content: "‼", deleteAfterMs: 1500 })
+		if (!forceRepost) {
+			if (message.blood) {
+				this.dat.integratePusherBlood(
+					member,
+					message.uid,
+					message.time,
+					message.type,
+					message.target,
+					message.flag,
+					true
+				)
+				this.dat.incrementTeamStatsFromOwn?.(message.flag, message.type, true)
+				for (let i = 0; i < 3; i++) {
+					await this.sendAnnouncement({ content: "‼", deleteAfterMs: 1500 })
+				}
+			}
+
+			if (this.isTeamMember(message.uid)) {
+				const changed = this.dat.integratePusherOwn(
+					message.uid,
+					message.time,
+					message.type,
+					message.target,
+					message.flag,
+					true
+				)
+				if (changed) {
+					this.dat.incrementTeamStatsFromOwn?.(message.flag, message.type, message.blood)
+					this.scheduleCachePersist()
+				}
 			}
 		}
 
-		if (this.isTeamMember(message.uid)) {
-			const changed = this.dat.integratePusherOwn(
-				message.uid,
-				message.time,
-				message.type,
-				message.target,
-				message.flag,
-				true
-			)
-			if (changed) {
-				this.dat.incrementTeamStatsFromOwn?.(message.flag, message.type, message.blood)
-				this.scheduleCachePersist()
-			}
-		}
+		return { ok: true }
 	}
 
 	async handleLaunchEvent(message) {
@@ -299,7 +351,7 @@ class NotificationRouter {
 		}
 		if (message.target) this.launchDebounce.add(message.target)
 		await this.sendAnnouncement({ embed: this.embeds.pusherNotif(message) })
-		this.recordEvent(message, "announced launch")
+		await this.recordEvent(message, "announced launch")
 	}
 
 	async handleTeamNotification(message) {
@@ -311,7 +363,7 @@ class NotificationRouter {
 			embed: this.embeds.pusherTeamNotification(message, mentionText),
 			mentionUserIds,
 		})
-		this.recordEvent(message, "announced notification")
+		await this.recordEvent(message, "announced notification")
 	}
 
 	async handleDefaultEvent(message) {
@@ -323,7 +375,7 @@ class NotificationRouter {
 			embed: this.embeds.pusherNotif(message, mentionText),
 			mentionUserIds,
 		})
-		this.recordEvent(message, "announced default")
+		await this.recordEvent(message, "announced default")
 	}
 
 	async handlePusherEvent(message) {
@@ -541,6 +593,52 @@ class NotificationRouter {
 			lastFallbackError: this.lastFallbackError,
 			config: this.config,
 		})
+	}
+
+	async getHistoryEmbed({ limit = 20, memberFilter = null } = {}) {
+		if (!this.notificationStore) {
+			return this.embeds.pusherHistory([], { memberFilter, persisted: false })
+		}
+
+		let uid = null
+		let memberName = null
+		if (memberFilter) {
+			const member = this.dat.resolveEnt(memberFilter, "member", false, null, false)
+			if (member?.id) {
+				uid = member.id
+			} else {
+				memberName = memberFilter
+			}
+		}
+
+		const rows = await this.notificationStore.list({ limit, uid, memberName })
+		return this.embeds.pusherHistory(rows, { memberFilter, persisted: true })
+	}
+
+	async repostToChannel({ eventId = null, useLast = false } = {}) {
+		if (!this.notificationStore) {
+			return { ok: false, reason: "no_store" }
+		}
+
+		const row = useLast
+			? await this.notificationStore.getLatest({})
+			: await this.notificationStore.getById(eventId)
+
+		if (!row) {
+			return { ok: false, reason: "not_found" }
+		}
+
+		const message = this.notificationStore.toRouterMessage(row)
+		if (!OWN_TYPES.has(message.type)) {
+			return { ok: false, reason: "not_own_type", row }
+		}
+
+		const result = await this.handleOwnEvent(message, { forceRepost: true })
+		if (result?.ok === false) {
+			return { ok: false, reason: result.reason, row }
+		}
+
+		return { ok: true, row }
 	}
 }
 

@@ -1050,17 +1050,43 @@ class HtbEmbeds {
 			const s = status.lastFallbackPollStats
 			lines.push(`**Last poll:** ${s.announced} announced, ${s.skipped} skipped, ${s.total} API items`)
 		}
-		lines.push("", "**Recent events:**")
+		lines.push("", "**Recent events (memory):**")
 		if (!status.lastEvents?.length) {
 			lines.push("_No Pusher events recorded yet._")
 		} else {
 			status.lastEvents.forEach(evt => {
 				const note = evt.note ? ` (${evt.note})` : ""
-				lines.push(`• \`${evt.at}\` ${evt.type || "?"} ${evt.target || ""}${evt.blood ? " 🩸" : ""}${note}`)
+				const id = evt.id ? `#${evt.id} ` : ""
+				lines.push(`• ${id}\`${evt.at}\` ${evt.type || "?"} ${evt.target || ""}${evt.blood ? " 🩸" : ""}${note}`)
 			})
 		}
 		return this.PUSHER_BASE
 			.setAuthor("Pusher status", this.ds.TEAM_STATS?.avatar_url || undefined)
+			.setDescription(lines.join("\n"))
+	}
+
+	pusherHistory(rows, meta = {}) {
+		const lines = []
+		if (meta.memberFilter) {
+			lines.push(`Filter: **${meta.memberFilter}**`)
+		}
+		if (meta.persisted === false) {
+			lines.push("_Notification history is unavailable (database store not initialized)._")
+		} else if (!rows?.length) {
+			lines.push("_No notification events stored yet._")
+		} else {
+			rows.forEach(row => {
+				const id = row.id != null ? `#${row.id}` : "?"
+				const member = row.member_name || (row.uid ? `uid:${row.uid}` : "?")
+				const posted = row.announced ? "✓" : "·"
+				const note = row.note ? ` _(${row.note})_` : ""
+				const at = row.event_at ? new Date(row.event_at).toISOString() : "?"
+				lines.push(`${posted} **${id}** \`${at}\` **${member}** ${row.event_type || "?"} ${row.target || ""} ${row.flag || ""}${row.blood ? " 🩸" : ""}${note}`)
+			})
+		}
+		lines.push("", "_✓ = posted to announce channel · `seven pusher repost <id>` or `seven pusher repost last`_")
+		return this.PUSHER_BASE
+			.setAuthor("Notification history", this.ds.TEAM_STATS?.avatar_url || undefined)
 			.setDescription(lines.join("\n"))
 	}
 

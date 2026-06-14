@@ -243,6 +243,11 @@ function sectionCaptain() {
 - ║   Re-login on labs.hackthebox.com → DevTools → Network
 - ║   → capture login/refresh → update tokens (see Admin).
 - ║   Bot stays online with cached data until tokens are fixed.
+# ║ Notification history (captain only)
+- ║   "pusher history" — last stored HTB events (all members)
+- ║   "pusher history <member>" — filter by HTB username
+- ║   "pusher repost last" / "pusher repost <id>" — force post to announce channel
+- ║   Use when Pusher/fallback missed an announce; does not re-sync HTB stats.
 ══╝`
 }
 

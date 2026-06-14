@@ -44,16 +44,22 @@ Common causes:
 **Symptoms:**
 
 - `Non-JSON HTML response for ...` in `sevenbot-error.log`
-- Sync errors during startup
-- Bot online but HTB queries fail
+- `HTB_REFRESH_TOKEN invalid` after restart or second container boot
+- Sync errors; bot may stay online with cached data
+- Captains receive a Discord DM with fix steps when OAuth init fails
 
 **Fix:**
 
-1. Regenerate App Token at [app.hackthebox.com](https://app.hackthebox.com) → Settings → App Tokens
-2. Update `HTB_V4_TOKEN` in `.env`
-3. `npm run docker:restart`
+1. Log in on [labs.hackthebox.com](https://labs.hackthebox.com) → DevTools → Network → `login/refresh`
+2. Copy `message.access_token` + `message.refresh_token`
+3. Update `.env`, **or** run: `seven set htb tokens <access> <refresh>`
+4. Configure persistence (Docker recommended):
+   - `HTB_TOKEN_FILE=/var/log/sevenbot/htb_tokens.json` — loaded **first** on startup
+   - `HTB_ENV_FILE=/config/seven.env` — Compose mounts `./.env` read-write; refreshed after each OAuth rotation
 
-There is **no automatic token refresh**. Plan to renew before expiry.
+**Common pitfall:** HTB rotates the refresh token on every refresh. If only `.env` is updated manually but `HTB_TOKEN_FILE` still holds an old pair (or vice versa), the next restart fails. Use both persistence paths or `seven set htb tokens`.
+
+Access tokens renew automatically (~72h). Refresh failure requires a new browser login — there is no password-based recovery.
 
 ### Slow sync (not stuck)
 
@@ -87,6 +93,9 @@ Discord requires embed descriptions. If a new feature ships without `.setDescrip
 - Verify `DISCORD_ANNOUNCE_CHAN_ID` is correct
 - Bot needs valid `HTB_V4_TOKEN` for Pusher auth
 - Only team members in cache trigger notifications
+- Admin: `seven pusher status` — connection, queue, recent memory buffer
+- Captain: `seven pusher history` — full persisted log; `seven pusher repost last` or `repost <id>` to force Discord post
+- Events are stored in Postgres table `seven_notification_events` (created automatically on boot)
 
 ## Charts not rendering
 

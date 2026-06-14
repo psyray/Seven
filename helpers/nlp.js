@@ -176,6 +176,28 @@ function resolveLocalIntent(content, dfResult = null, decodedParams = null) {
 		}
 	}
 
+	const pusherHistoryMatch = text.match(/^pusher\s+history(?:\s+(\S+))?\s*$/i)
+	if (pusherHistoryMatch) {
+		return {
+			intent: "captain.pusherHistory",
+			parameters: { memberFilter: pusherHistoryMatch[1] || null },
+			allRequiredParamsPresent: true,
+		}
+	}
+
+	const pusherRepostMatch = text.match(/^pusher\s+repost\s+(last|\d+)\s*$/i)
+	if (pusherRepostMatch) {
+		const target = pusherRepostMatch[1].toLowerCase()
+		return {
+			intent: "captain.pusherRepost",
+			parameters: {
+				eventId: target === "last" ? null : Number(target),
+				useLast: target === "last",
+			},
+			allRequiredParamsPresent: true,
+		}
+	}
+
 	const teamLeaderPhrases = [
 		/who(?:'s| is)\s+(?:the\s+)?(?:number\s*|#\s*|no\.?\s*)?1(?:\s+(?:on|of|in)\s+(?:the\s+)?team)?/,
 		/who(?:'s| is)\s+on\s+top/,

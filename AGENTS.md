@@ -34,8 +34,10 @@ helpers/
   classes.js        Domain wrappers (HtbMachine, TeamMember, …)
   dflow.js          DialogFlow entity sync
   pusher-htb.js     HTB Pusher client + HTML event parser
-  notification-router.js  Real-time own routing, mentions, fallback poll
+  notification-router.js  Real-time own routing, mentions, fallback poll, captain repost
+  notification-store.js   Postgres persistence for notification events
   pusher-config.js  PUSHER_* env toggles
+  env-tokens.js       Atomic HTB OAuth sync to HTB_ENV_FILE (.env)
 config/
   htb.js            HTB_API_BASE, HTB_API_V5_BASE, HTB_APP_BASE
 static/
@@ -49,13 +51,15 @@ static/
 2. **Sync**: `DAT.update()` fetches missing sections from HTB API (smart partial sync)
 3. **Query**: User message → DialogFlow intent OR `resolveEnt()` → `HtbEmbeds` → `Send.embed()`
 4. **Persist**: `updateCache()` writes in-memory state back to Postgres
-5. **Real-time owns**: HTB Pusher → `NotificationRouter` → announce channel + debounced cache update
+5. **Real-time owns**: HTB Pusher → `NotificationRouter` → announce channel + debounced cache update; each event persisted via `NotificationStore` → `seven_notification_events`
 
 ## HTB API (v4 OAuth auth)
 
-- Auth: `HTB_V4_TOKEN` (OAuth access JWT) + `HTB_REFRESH_TOKEN` (refresh) — **no v3 session, no password login**
-- Refresh: `POST labs.hackthebox.com/api/v4/login/refresh` — automatic before access expiry
-- Optional: `HTB_TOKEN_FILE` JSON persisted after each refresh
+- Auth: `HTB_V4_TOKEN` (OAuth access JWT) + `HTB_REFRESH_TOKEN` (refresh) — **no v3 session, no password login, no static App Token**
+- Refresh: `POST labs.hackthebox.com/api/v4/login/refresh` — automatic before access expiry; HTB rotates refresh token each time
+- Persistence: `HTB_TOKEN_FILE` JSON (loaded first) + optional `HTB_ENV_FILE` (`.env` sync via `helpers/env-tokens.js`)
+- Hot-reload: `seven set htb tokens <access> <refresh>` or watch `HTB_TOKEN_FILE`
+- Auth failure: captains notified by Discord DM; bot continues with cached data
 - v4 base: `https://labs.hackthebox.com/api/v4` (profiles, team, challenges, …)
 - v5 base: `https://labs.hackthebox.com/api/v5` (machine list pagination)
 
@@ -99,7 +103,9 @@ Use `createLogger("module-name")` from `helpers/logger.js`. Logs go to console +
 
 - `admin.forceUpdateData` → smart team sync (`force: true`)
 - `admin.clearCached` → wipe memory + full refresh (`full: true`)
-- `admin.pusherStatus` → Pusher connection, announce queue, recent events
+- `admin.pusherStatus` → Pusher connection, announce queue, recent in-memory events
+- `admin.setHtbTokens` → hot-reload OAuth pair (`seven set htb tokens …`)
+- `captain.pusherHistory` / `captain.pusherRepost` → persisted notification log + forced announce repost (captain only)
 - `getTeamInfo`, `getMemberRank`, `getTargetInfo`, … → see `bot.js` switch and [docs/developer/intents.md](docs/developer/intents.md)
 
 ## References

@@ -52,7 +52,7 @@ Provide your HTB user ID when prompted if needed.
 - **Ignored members** — HTB IDs you asked to exclude (in Postgres)
 - **Team cache** — public HTB achievement data for your team (synced from HTB API)
 
-Seven does not store HTB passwords or session tokens. The bot operator's `HTB_V4_TOKEN` is an App Token used server-side only.
+Seven does not store HTB passwords or session cookies. The bot operator configures OAuth access/refresh tokens (`HTB_V4_TOKEN`, `HTB_REFRESH_TOKEN`) server-side only — never shared with channel users.
 
 ## Privacy tips
 

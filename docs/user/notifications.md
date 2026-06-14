@@ -6,7 +6,9 @@ Seven can post real-time HTB achievement announcements to a configured Discord c
 
 Seven subscribes to HTB's public Pusher feed (`helpers/pusher-htb.js`) and routes events through `helpers/notification-router.js`. When an event concerns a member of your team (or a global first blood), Seven posts a formatted embed to the **announce channel** configured by your admin (`DISCORD_ANNOUNCE_CHAN_ID`).
 
-If Pusher disconnects, Seven falls back to polling `team/activity` from the HTB API.
+If Pusher disconnects or HTB stops pushing live events, Seven polls each team member's `user/profile/activity` on a schedule.
+
+Every processed event (announced, skipped, or failed) is **persisted in Postgres** (`seven_notification_events`) so captains can review history and force a repost when something was missed.
 
 ## Event types
 
@@ -30,6 +32,21 @@ If a team member has **linked their Discord account to HTB** (see [privacy.md](p
 2. **Stay in the team** — notifications fire for current team members in Seven's cache, plus global first blood events
 3. **Watch the announce channel** — your admin configures which channel receives posts
 
+## Captain — history & forced repost
+
+**Captain only** (not admins unless they are also listed as captain):
+
+| Command | Purpose |
+|---------|---------|
+| `seven pusher history` | Last stored notification events (all members) |
+| `seven pusher history <member>` | Filter by HTB username |
+| `seven pusher repost last` | Repost the latest stored own/flag to the announce channel |
+| `seven pusher repost <id>` | Repost a specific event (`#id` from the history embed) |
+
+Use repost when an own was recorded (or detected by fallback) but never appeared in the announce channel. Repost does **not** re-sync HTB stats — it only sends the Discord embed again.
+
+Admins can still run `seven pusher status` for live Pusher connection diagnostics (see [commands.md](commands.md)).
+
 ## What notifications don't include
 
 - Private or non-team activity (except first blood)
@@ -44,7 +61,8 @@ If a team member has **linked their Discord account to HTB** (see [privacy.md](p
 | No pings when I root | Discord not linked to HTB, or `PUSHER_MENTION_ON_OWN=false` |
 | No announce channel activity | Bot offline, wrong channel config, or not a team member |
 | Wrong person pinged | Stale Discord link — unlink and re-link |
-| Lab owns missing | Rare HTML format change — admin can check `seven pusher status` |
+| Lab owns missing | Rare HTML format change — captain/admin checks `seven pusher status`; captain may `seven pusher repost last` |
+| Own happened but no Discord post | Pusher silent or channel not ready — captain: `seven pusher history` then `seven pusher repost <id>` |
 
 For server-side issues (Pusher disconnect, token expiry), contact your admin or see [admin/operations.md](../admin/operations.md).
 

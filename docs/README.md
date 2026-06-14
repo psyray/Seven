@@ -53,8 +53,20 @@ Regenerate after code changes: `npm run doc:generate`
 | Topic | Location |
 |-------|----------|
 | Docker deployment | [admin/setup.md](admin/setup.md) |
-| HTB App Token | [admin/setup.md#hack-the-box-app-token](admin/setup.md) |
+| HTB OAuth tokens | [admin/setup.md#hack-the-box-authentication](admin/setup.md#2-hack-the-box-authentication) |
 | Force update vs clear cache | [admin/operations.md](admin/operations.md) |
 | Pusher notifications | [user/notifications.md](user/notifications.md) · [developer/pusher-events.md](developer/pusher-events.md) |
+| Captain repost / history | [user/commands.md](user/commands.md#captain-commands) · `seven pusher history` |
+
+## Recent changes (2026-06-14)
+
+| Area | Summary |
+|------|---------|
+| **OAuth** | Access + refresh tokens; auto-refresh; `HTB_TOKEN_FILE` + `HTB_ENV_FILE` persistence; `seven set htb tokens`; captain DM on auth failure |
+| **Pusher** | `NotificationRouter` — queue, filters, `@mentions`, fallback poll, reconnect catch-up, channel resubscribe |
+| **Fallback API** | `getRecentMemberActivities()` per member (not `team/activity`); poll always active |
+| **Persistence** | `seven_notification_events` table; captain `pusher history` / `pusher repost` |
+| **Dev** | `PUSHER_MSG_LOG.json` under `LOG_DIR`; `npm run test:pusher` |
+| **API** | `isOptionalMemberProfilePath()` — tolerate 404 on optional member endpoints |
 | Link Discord to HTB | [user/privacy.md](user/privacy.md) |
 | Smoke tests | [developer/testing.md](developer/testing.md) |

@@ -68,7 +68,7 @@ Details: [docs/user/privacy.md](docs/user/privacy.md)
 
 ```bash
 cp static/templates/.env.docker.example .env
-# Fill BOT_TOKEN, HTB_V4_TOKEN, GOOGLE_*, DISCORD_*, HTB_TEAM_ID
+# Fill BOT_TOKEN, HTB_V4_TOKEN, HTB_REFRESH_TOKEN, GOOGLE_*, DISCORD_*, HTB_TEAM_ID
 
 npm run docker:up
 npm run docker:logs
@@ -88,7 +88,8 @@ For AI-assisted development (Cursor rules, skills, architecture): [AGENTS.md](AG
 - [x] Machine and challenge filters and lists
 - [x] Self info via Discord ↔ HTB linking
 - [x] Docker Compose deployment with PostgreSQL
-- [x] HTB v4/v5 API migration (App Token auth)
+- [x] HTB v4/v5 API migration (OAuth access/refresh tokens)
+- [x] Real-time Pusher notifications + activity fallback + Postgres event log
 - [x] Offline smoke test suite
 - [ ] RTFM advice for stuck users
 - [ ] Large member list responses (Discord embed limits)

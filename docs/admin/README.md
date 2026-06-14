@@ -7,7 +7,7 @@ This guide is for team leaders and server admins who deploy and operate a Seven 
 | Service | Purpose |
 |---------|---------|
 | **Discord** | Bot application, server, announce channel, emoji guild |
-| **Hack The Box** | Team (or university), App Token from app.hackthebox.com |
+| **Hack The Box** | Team (or university), OAuth access + refresh tokens from labs.hackthebox.com |
 | **Google Cloud** | Dialogflow agent + service account |
 | **Docker host** | Runs Seven + PostgreSQL (recommended) |
 
@@ -16,11 +16,11 @@ This guide is for team leaders and server admins who deploy and operate a Seven 
 ```
 Discord users → Seven bot (Node.js) → Dialogflow (NLP)
                          ↓
-              HTB API v4/v5 (App Token)
+              HTB API v4/v5 (OAuth Bearer)
                          ↓
-              PostgreSQL (cache persistence)
+              PostgreSQL (seven_data cache + seven_notification_events)
                          ↓
-              Pusher (real-time achievements)
+              Pusher + activity fallback (real-time achievements)
 ```
 
 Seven caches HTB data in memory and persists it to Postgres. On startup it restores from the database and syncs only missing sections from HTB.

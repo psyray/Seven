@@ -32,6 +32,12 @@ Syncs entity types (machines, challenges, members, flags) upstream/downstream. S
 
 `checkSelfName()`, typoify for human-like responses.
 
+Local commands (no Dialogflow intent) in `resolveLocalIntent()`:
+
+- `set htb tokens <access> <refresh>` (admin)
+- `pusher status` (admin)
+- `pusher history [member]`, `pusher repost last|<id>` (captain)
+
 ## Conventions
 
 - Export pattern: `module.exports = { Format }` or `class` + named export

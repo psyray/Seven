@@ -24,6 +24,8 @@ Expected startup logs:
 - `[datastore] HTB data update started (partial bootstrap …)` or `skipped (cache complete)`
 - `[DISCORD]::: CLIENT READY`
 
+On first boot after upgrade, `NotificationStore.ensureSchema()` creates `seven_notification_events` in the same Postgres DB (persists Pusher/fallback history for captain `seven pusher history` / `repost`).
+
 ## Postgres password issues
 
 **Symptom**: `password authentication failed for user "seven"`
@@ -55,7 +57,8 @@ npm run docker:restart
 ## Environment checklist
 
 - [ ] No `DATABASE_URL` in `.env` (compose injects `PGHOST=postgres`)
-- [ ] `HTB_V4_TOKEN` is fresh App Token (not expired)
+- [ ] `HTB_V4_TOKEN` + `HTB_REFRESH_TOKEN` from browser OAuth (not static App Token)
+- [ ] `HTB_TOKEN_FILE` + `HTB_ENV_FILE=/config/seven.env` for Docker token rotation
 - [ ] `GOOGLE_APPLICATION_CREDENTIALS` is valid JSON (single line in `.env`)
 - [ ] `API_SERVER_*` vars removed unless `API_SERVER_ENABLED=true`
 - [ ] `LOG_DIR=/var/log/sevenbot` (matches compose volume)

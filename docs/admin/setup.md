@@ -79,10 +79,13 @@ npm run docker:logs
 ### Expected startup sequence
 
 1. `[DB IMPORT]::: Restored from DB backup.` (or empty on first run)
-2. `[datastore] HTB data update started (partial bootstrap …)` or `skipped (cache complete)`
-3. Machine sync: `v5 list + selective v4 profiles`
-4. Team/challenges sync (may take minutes for large teams)
-5. `[DISCORD]::: CLIENT READY`
+2. `NotificationStore.ensureSchema()` — creates `seven_notification_events` if missing
+3. `[datastore] HTB data update started (partial bootstrap …)` or `skipped (cache complete)`
+4. Machine sync: `v5 list + selective v4 profiles`
+5. Team/challenges sync (may take minutes for large teams)
+6. `[DISCORD]::: CLIENT READY`
+
+Optional verification (admin): `seven pusher status` — Pusher connection and fallback poll stats.
 
 ## 6. Post-setup commands
 

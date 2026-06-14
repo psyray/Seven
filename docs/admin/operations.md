@@ -7,7 +7,7 @@ Day-to-day administration of a running Seven instance.
 | Role | Env variable | Capabilities |
 |------|--------------|--------------|
 | **Admin** | `ADMIN_DISCORD_IDS` | All commands including clear cache, emoji, parrot mode, status |
-| **Captain** | `CAPTAIN_DISCORD_IDS` | Force update (smart sync) |
+| **Captain** | `CAPTAIN_DISCORD_IDS` | Force update; notification history (`pusher history`); forced repost (`pusher repost`) |
 | **User** | Everyone else | Standard HTB queries |
 
 Captains who are also in `ADMIN_DISCORD_IDS` get admin commands.
@@ -78,7 +78,7 @@ Relays channel messages to the first admin's DM — useful for debugging what us
 seven set htb tokens eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... def50200...
 ```
 
-Hot-reloads both tokens in memory without restart. Also persists to `HTB_TOKEN_FILE` when configured.
+Hot-reloads both tokens in memory without restart. Persists to `HTB_TOKEN_FILE` and syncs `HTB_ENV_FILE` when configured.
 
 ### Pusher status (admin)
 
@@ -86,7 +86,18 @@ Hot-reloads both tokens in memory without restart. Also persists to `HTB_TOKEN_F
 seven pusher status
 ```
 
-Shows Pusher connection state, pending announce queue size, recent events, and API fallback poll status.
+Shows Pusher connection state, pending announce queue size, recent in-memory events, and API fallback poll status.
+
+### Notification history & repost (captain)
+
+```
+seven pusher history
+seven pusher history psyray
+seven pusher repost last
+seven pusher repost 42
+```
+
+Captain only (`CAPTAIN_DISCORD_IDS`). Reads persisted rows from `seven_notification_events`; repost sends the own embed to `DISCORD_ANNOUNCE_CHAN_ID` without re-integrating HTB stats (safe to retry after a missed announce).
 
 ## Real-time notifications (Pusher)
 
@@ -104,12 +115,13 @@ Seven announces team owns (and global first blood) on `DISCORD_ANNOUNCE_CHAN_ID`
 | `PUSHER_ANNOUNCE_RESPECTS` | `false` | Respect notifications |
 | `PUSHER_ANNOUNCE_JOINS` | `false` | HTB account join notifications |
 | `PUSHER_DB_PERSIST_DEBOUNCE_MS` | `30000` | Delay before writing Pusher cache updates to Postgres |
-| `PUSHER_FALLBACK_POLL_MS` | `300000` | Poll `team/activity` when Pusher is unhealthy |
+| `PUSHER_FALLBACK_POLL_MS` | `300000` | Poll `user/profile/activity` per team member (runs even when Pusher is healthy) |
 
 **Troubleshooting:**
 
 - No live announces but bot online → run `seven pusher status`; check `HTB_V4_TOKEN` (Pusher auth uses the same Bearer token)
-- Missed events after outage → fallback poll catches up; force `seven force update` for full member activity refresh
+- Missed events after outage → fallback poll catches up; captain runs `seven pusher history` and `seven pusher repost <id>` if needed
+- Target/member not resolved on repost → `seven force update` to refresh cache, then retry repost
 - Collect raw payloads in staging → set `IS_DEV_INSTANCE=true` and inspect `LOG_DIR/PUSHER_MSG_LOG.json` (Docker volume `seven_logs`) or `cache/PUSHER_MSG_LOG.json` locally
 
 ## Sync behaviour (automatic)

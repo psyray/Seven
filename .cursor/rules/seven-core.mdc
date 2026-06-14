@@ -23,13 +23,14 @@ Node.js (Docker: 20, local: >=16), discord.js v12, DialogFlow, pg-promise, super
 
 ## Rules
 
-1. **v4 auth** — `HTB_V4_TOKEN` + `HTB_REFRESH_TOKEN` required; refresh via `labs/api/v4/login/refresh`; no password login, no App Token static without refresh
+1. **v4 auth** — `HTB_V4_TOKEN` + `HTB_REFRESH_TOKEN` required; refresh via `labs/api/v4/login/refresh`; load `HTB_TOKEN_FILE` before `.env`; sync both to `HTB_ENV_FILE` after refresh (`helpers/env-tokens.js`); no password login, no App Token static without refresh
 2. **Partial sync** — startup must skip cached sections; use `getSectionsNeedingUpdate()` logic
 3. **Null-safe caches** — initialize empty objects as `{}`, guard before `Object.values()`
 4. **Logging** — use `createLogger("name")`, not raw `console.log` for new code in modules
 5. **Embeds** — every `MessageEmbed` needs `.setDescription()` (Discord API requirement)
 6. **Env** — single template: `static/templates/.env.docker.example`; no `.env_sample`
 7. **Scope** — minimal diffs; match existing patterns (classes, naming, error style)
+8. **Notification events** — persist via `NotificationStore` (`seven_notification_events`); captain repost uses `forceRepost: true` (no duplicate HTB stat integration)
 
 ## Intent routing
 

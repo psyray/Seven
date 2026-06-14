@@ -165,6 +165,17 @@ Available to captains and admins:
 - Re-login on [labs.hackthebox.com](https://labs.hackthebox.com) → DevTools → Network → `login/refresh` → update tokens (see Admin).
 - The bot stays online with cached data until tokens are fixed.
 
+### Notification history & repost (captain only)
+
+Not available to admins unless they are also in `CAPTAIN_DISCORD_IDS`:
+
+- `pusher history` — persisted HTB notification events (Pusher + fallback)
+- `pusher history <member>` — filter by HTB username
+- `pusher repost last` — repost the latest stored own/flag to the announce channel
+- `pusher repost <id>` — repost a specific event (id from history embed)
+
+See [notifications.md](notifications.md) for details.
+
 ---
 
 ## Admin commands

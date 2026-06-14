@@ -35,6 +35,13 @@ Entity sync runs after HTB data refresh. On dev instances (`IS_DEV_INSTANCE=true
 - Pre-resolve before Dialogflow fallback
 - Extract target names from free-form messages
 
+Pusher maintenance phrases (regex in `resolveLocalIntent()`):
+
+- `set htb tokens <access> <refresh>` → admin OAuth hot-reload
+- `pusher status` → admin status embed
+- `pusher history` / `pusher history <member>` → captain DB history
+- `pusher repost last` / `pusher repost <id>` → captain forced announce
+
 Local NLP runs in smoke tests (`npm run test:intents`) without calling Dialogflow.
 
 ## Dev instance

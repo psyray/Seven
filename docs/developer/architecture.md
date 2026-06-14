@@ -47,7 +47,9 @@ flowchart LR
 | `views/embeds.js` | All Discord embed builders |
 | `helpers/nlp.js` | Local intent resolution before/after DialogFlow |
 | `helpers/dflow.js` | Sync HTB entities to Dialogflow for name recognition |
-| `helpers/pusher-htb.js` | Parse Pusher events, post to announce channel |
+| `helpers/pusher-htb.js` | Parse Pusher events, emit structured messages |
+| `helpers/notification-router.js` | Route/filter owns, announce queue, fallback poll, captain repost |
+| `helpers/notification-store.js` | Persist events to `seven_notification_events` (Postgres) |
 | `helpers/chart-messages.js` | Build chart embeds with graceful Puppeteer failure |
 | `modules/charts/index_new.js` | Highcharts → PNG via Puppeteer |
 
@@ -83,6 +85,8 @@ Order: `machines → specials → tags → team → challenges`
 ## Postgres backup
 
 Table `seven_data` stores JSON blobs per entity type. `updateCache()` writes after sync; `importDbBackup()` reads on startup. Manual fields (`discord_links`, `team_members_ignored`) are not overwritten by HTB sync.
+
+Table `seven_notification_events` (created by `NotificationStore.ensureSchema()` on boot) stores Pusher/fallback notification history: member, target, flag, blood, source channel, note, and whether the event was posted to Discord (`announced`). In-memory `lastEvents` (25 items) is hydrated from this table at startup for admin status embeds.
 
 ## Discord integration
 

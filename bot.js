@@ -30,6 +30,7 @@ const strings = require("./static/strings")
 const { Helpers: H } = require("./helpers/helpers.js")
 const { HtbPusherSubscription } = require("./helpers/pusher-htb")
 const { NotificationRouter } = require("./helpers/notification-router")
+const { NotificationStore } = require("./helpers/notification-store")
 const pgp = require("pg-promise")({ capSQL: true })
 const htbCharts = require("./modules/charts/index_new.js")
 const { HtbEmbeds } = require("./views/embeds.js")
@@ -108,6 +109,7 @@ function loadPusherMsgLog() {
 var DISCORD_ANNOUNCE_CHAN = false         // The Discord Channel object intended to recieve Pusher achievements.
 var HTB_PUSHER_OWNS_SUBSCRIPTION = false  // The Pusher Client own channel subscription.
 var NOTIFICATION_ROUTER = null
+var NOTIFICATION_STORE = null
 const SEVEN_DB_TABLE_NAME = "seven_data"
 var PUSHER_MSG_LOG = DEV_MODE_ON ? loadPusherMsgLog() : null
 
@@ -142,6 +144,7 @@ const cn = getDbConfig()
 
 const DB_FIELDNAMES_AUTO = ["MACHINES", "CHALLENGES", "FORTRESSES", "ENDGAMES", "PROLABS", "TEAM_MEMBERS", "TEAM_MEMBERS_IGNORED", "TEAM_STATS", "DISCORD_LINKS", "MISC"]
 const db = pgp(cn)
+NOTIFICATION_STORE = new NotificationStore(db)
 
 /** Imports globals from the cloud backup (Objects stored as raw, singular JSON columns in DB)
  * @returns {Promise}
@@ -182,7 +185,8 @@ async function importDbBackup() {
 				// console.log("[SEVEN_DB]::: Data table found.")
 				return true
 			}
-		}).then(() => {
+		}).then(async () => {
+			await NOTIFICATION_STORE.ensureSchema()
 			return db.any(`SELECT json FROM ${SEVEN_DB_TABLE_NAME} ORDER BY id ASC;`, [true]).then(
 				rows => {
 					DAT.MACHINES = rows[0].json
@@ -548,7 +552,9 @@ async function main() {
 		updateCache,
 		notifyAdmins,
 		getTeamId: () => DAT.TEAM_STATS?.id,
+		notificationStore: NOTIFICATION_STORE,
 	})
+	await NOTIFICATION_ROUTER.initFromStore()
 
 	HTB_PUSHER_OWNS_SUBSCRIPTION.on("pusherevent", async message => {
 		if (DEV_MODE_ON) {
@@ -1003,6 +1009,51 @@ function logSmokeResult(smokeId, meta) {
 	console.log(`[SMOKE] result ${JSON.stringify({ smokeId, ...meta })}`)
 }
 
+async function captainPusherHistory(message, parameters = {}) {
+	if (!isCaptain(message.author)) {
+		await SEND.human(message, "Sorry, captain only.")
+		return
+	}
+	const embed = await NOTIFICATION_ROUTER.getHistoryEmbed({
+		limit: parameters.limit || 20,
+		memberFilter: parameters.memberFilter || null,
+	})
+	await SEND.embed(message, embed)
+}
+
+async function captainPusherRepost(message, parameters = {}) {
+	if (!isCaptain(message.author)) {
+		await SEND.human(message, "Sorry, captain only.")
+		return
+	}
+	const result = await NOTIFICATION_ROUTER.repostToChannel({
+		eventId: parameters.eventId || null,
+		useLast: Boolean(parameters.useLast),
+	})
+	if (result.ok) {
+		const row = result.row
+		await SEND.human(
+			message,
+			`Reposted event #${row.id} to the announce channel (${row.member_name || row.uid} · ${row.event_type} · ${row.target || "?"})`,
+			true
+		)
+		return
+	}
+	if (result.reason === "not_found") {
+		await SEND.human(message, "No matching event found in history.", true)
+	} else if (result.reason === "not_own_type") {
+		await SEND.human(message, "Only flag/own events can be reposted to the announce channel.", true)
+	} else if (result.reason === "target_not_in_cache") {
+		await SEND.human(message, "Target is not in cache — run `seven force update` then retry.", true)
+	} else if (result.reason === "member_not_resolved") {
+		await SEND.human(message, "Member could not be resolved — refresh team data then retry.", true)
+	} else if (result.reason === "discord_send_failed") {
+		await SEND.human(message, "Discord announce channel is unavailable.", true)
+	} else {
+		await SEND.human(message, `Repost failed (${result.reason || "unknown"}).`, true)
+	}
+}
+
 async function handleMessage(message) {
 	let smokeId = null
 	const smokePrefix = message.content.match(/^\[SMOKE:([^\]]+)\]\s*/)
@@ -1049,6 +1100,8 @@ async function handleMessage(message) {
 						case "admin.passthruOff": if (isAdmin(message.author)) { SEND.human(message, `Parrot mode ${F.STL("OFF", "bs")}. 🦜`); SEND.passthruOff() } else { SEND.human(message, "Sorry, not for you. 🦜") } break
 						case "admin.clearCached": await admin_clearCached(message); break
 						case "admin.pusherStatus": if (isAdmin(message.author)) { SEND.embed(message, NOTIFICATION_ROUTER.getStatusEmbed()) } else { SEND.human(message, "Sorry, not for you.") } break
+						case "captain.pusherHistory": await captainPusherHistory(message, P); break
+						case "captain.pusherRepost": await captainPusherRepost(message, P); break
 						case "admin.setStatus": admin_setStatus(message, inf); break
 						case "admin.clearEmoji": E.clearCustEmoji(client).then(SEND.human(message, "Successfully purged Seven-related emoji from supporting channel.", false)); break
 						case "admin.setupEmoji": E.initCustEmoji(client).then(SEND.human(message, "Successfully initialized Seven-related emoji on supporting channel.", false)); break
@@ -1145,6 +1198,19 @@ async function handleMessage(message) {
 						}
 						case "getNewBox":
 							SEND.embed(message, await EGI.infoFor("machine", DAT.getNewBoxId(), true))
+							break
+						case "captain.pusherHistory":
+							await captainPusherHistory(message, P)
+							break
+						case "captain.pusherRepost":
+							await captainPusherRepost(message, P)
+							break
+						case "admin.pusherStatus":
+							if (isAdmin(message.author)) {
+								SEND.embed(message, NOTIFICATION_ROUTER.getStatusEmbed())
+							} else {
+								await SEND.human(message, "Sorry, not for you.")
+							}
 							break
 						default:
 							await SEND.human(message, result.fulfillmentText)

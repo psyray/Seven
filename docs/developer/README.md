@@ -30,9 +30,12 @@ modules/
   charts/               Highcharts image generation
 views/embeds.js         HtbEmbeds — Discord embed builders
 helpers/
-  nlp.js                Local intent overrides
+  nlp.js                Local intent overrides (OAuth reload, pusher commands)
+  env-tokens.js         Atomic OAuth sync to HTB_ENV_FILE
   dflow.js              DialogFlow entity sync
-  pusher-htb.js         Real-time HTB notifications
+  pusher-htb.js         Real-time HTB notifications (parse)
+  notification-router.js Announce routing, fallback, captain repost
+  notification-store.js Postgres notification event log
   puppeteer-launch.js   Shared Chromium options
   smoke-*.js            Offline test infrastructure
   test-catalog.js       Help-derived test prompts

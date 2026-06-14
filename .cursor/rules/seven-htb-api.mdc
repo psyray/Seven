@@ -15,7 +15,11 @@ HTB_API_V5_BASE // v5 — machine list pagination
 HTB_APP_BASE    // https://app.hackthebox.com — profile/badge URLs
 ```
 
-Token: `HTB_V4_TOKEN` (OAuth access JWT) + `HTB_REFRESH_TOKEN` (refresh). Auto-refresh via `POST ${HTB_API_BASE}/login/refresh`; persist to `HTB_TOKEN_FILE` JSON after each refresh. Invalid refresh → `HtbAuthError` (bot stays online, cache consultable).
+Token: `HTB_V4_TOKEN` (OAuth access JWT) + `HTB_REFRESH_TOKEN` (refresh). Auto-refresh via `POST ${HTB_API_BASE}/login/refresh`; persist to `HTB_TOKEN_FILE` + optional `HTB_ENV_FILE` via `helpers/env-tokens.js` after each refresh. Load order: **file first**, then `.env`. Invalid refresh → `HtbAuthError` (bot stays online; captains DM'd).
+
+Member profile 404 on optional paths: `isOptionalMemberProfilePath()` — swallow, don't fail bulk sync.
+
+Pusher fallback: `getRecentMemberActivities(memberIds, sinceMs)` — per-member `user/profile/activity`, not `team/activity`.
 
 ## htb-api.js patterns
 

@@ -84,25 +84,35 @@ Messages matching HTB entity names bypass DialogFlow via `DAT.resolveEnt(message
 |--------|----------|-----------|
 | `admin.forceUpdateData` | `forceUpdate()` | `{ force: true }` |
 | `admin.clearCached` | `admin_clearCached()` | `{ full: true }` |
+| `admin.setHtbTokens` | `admin_setHtbTokens()` | local NLP: `set htb tokens …` |
 | `admin.pusherStatus` | `NOTIFICATION_ROUTER.getStatusEmbed()` | — |
+| `captain.pusherHistory` | `NOTIFICATION_ROUTER.getHistoryEmbed()` | — |
+| `captain.pusherRepost` | `NOTIFICATION_ROUTER.repostToChannel()` | `forceRepost` skips dedup + stat integration |
 
 ## Pusher real-time notifications
 
 ```
 HTB Pusher → parsePusherEvent [pusher-htb.js]
   → NotificationRouter.handlePusherEvent [notification-router.js]
+    → recordEvent → NotificationStore.append [notification-store.js → seven_notification_events]
     → HtbEmbeds.pusherOwn / pusherNotif / pusherTeamNotification
     → DISCORD_ANNOUNCE_CHAN (with allowedMentions for linked users)
-    → integratePusherOwn/Blood + debounced updateCache
+    → integratePusherOwn/Blood + debounced updateCache (skipped on forceRepost)
 ```
 
 When extending notification types:
 
 1. Parse in `helpers/pusher-htb.js` (`parsePusherEvent`)
 2. Route in `helpers/notification-router.js` (`OWN_TYPES`, config filters)
-3. Embed in `views/embeds.js` (`pusherOwn`, `pusherTeamNotification`)
+3. Embed in `views/embeds.js` (`pusherOwn`, `pusherTeamNotification`, `pusherHistory`)
 4. Cache in `SevenDatastore.integratePusherOwn()` if query commands need live data
 5. Sample HTML in `cache/PUSHER_SAMPLE_EVENTS.json` + `npm run test:pusher`
+
+Captain recovery (local NLP in `helpers/nlp.js`):
+
+- `seven pusher history [member]` → `getHistoryEmbed()`
+- `seven pusher repost last|<id>` → `repostToChannel()` → `handleOwnEvent({ forceRepost: true })`
+- Guard with `isCaptain()` only (not admin unless also captain)
 
 Mentions: `DAT.getDiscordMention(uid)` + `allowedMentions: { users: [id] }` — not `tryDiscordifyUid` alone.
 
@@ -115,14 +125,16 @@ Config: `PUSHER_*` vars via `helpers/pusher-config.js` (see `static/templates/.e
 3. Test empty cache: clear → verify graceful embeds, not crashes
 4. Pusher parser: `npm run test:pusher`
 5. Admin status: `seven pusher status`
+6. Captain history/repost: `seven pusher history`, `seven pusher repost last` (after an event is stored)
 
 ## Key files
 
-- `bot.js` — intent switch, admin guards (`isAdmin`, `isCaptain`), wires `NotificationRouter`
-- `views/embeds.js` — all embed builders (`pusherOwn`, `pusherStatus`, …)
+- `bot.js` — intent switch, admin/captain guards, wires `NotificationRouter` + `NotificationStore`
+- `views/embeds.js` — all embed builders (`pusherOwn`, `pusherStatus`, `pusherHistory`, …)
 - `modules/send.js` — delivery, typing simulation
 - `helpers/emoji.js` — custom HTB emoji
 - `helpers/pusher-htb.js` — Pusher client + HTML parser
-- `helpers/notification-router.js` — announce routing, queue, fallback
+- `helpers/notification-router.js` — announce routing, queue, fallback, repost
+- `helpers/notification-store.js` — Postgres event log
 - `helpers/pusher-config.js` — `PUSHER_*` env config
 - `static/strings.js` — help text, canned responses

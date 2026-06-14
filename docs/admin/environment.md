@@ -43,8 +43,10 @@ Optional tuning for real-time own announcements. Defaults enable all own types e
 | `PUSHER_ANNOUNCE_RESPECTS` | `false` | Respect notifications |
 | `PUSHER_ANNOUNCE_JOINS` | `false` | HTB registration join notifications |
 | `PUSHER_ANNOUNCE_SHOUTBOX` | `false` | Global shoutbox relay |
-| `PUSHER_DB_PERSIST_DEBOUNCE_MS` | `30000` | Debounce before Postgres persist after owns |
-| `PUSHER_FALLBACK_POLL_MS` | `300000` | `team/activity` poll interval when Pusher is down |
+| `PUSHER_DB_PERSIST_DEBOUNCE_MS` | `30000` | Debounce before Postgres persist of HTB cache after owns |
+| `PUSHER_FALLBACK_POLL_MS` | `300000` | Member activity poll interval (runs even when Pusher is healthy) |
+
+Notification events are stored automatically in Postgres table `seven_notification_events` (no env var). Captain commands: `seven pusher history`, `seven pusher repost last|<id>`. See [operations.md](operations.md).
 
 ## Hack The Box (v4 API — OAuth)
 
@@ -53,7 +55,7 @@ Optional tuning for real-time own announcements. Defaults enable all own types e
 | `HTB_V4_TOKEN` | Yes | — | OAuth access token (JWT) from browser login |
 | `HTB_REFRESH_TOKEN` | Yes | — | OAuth refresh token (`def50200...`) |
 | `HTB_TOKEN_FILE` | No | — | JSON file path for persistence and hot-reload (loaded first on startup) |
-| `HTB_ENV_FILE` | No | — | `.env` path updated after each OAuth refresh (Docker: `/config/seven.env`) |
+| `HTB_ENV_FILE` | No | — | `.env` path updated after each OAuth refresh (Docker Compose: `./.env` mounted at `/config/seven.env`) |
 | `HTB_TOKEN_EXPIRY_WARN_DAYS` | No | `1` | Alert admins this many days before access expiry |
 | `HTB_API_BASE` | No | `https://labs.hackthebox.com/api/v4` | v4 API base URL |
 | `HTB_API_V5_BASE` | No | `https://labs.hackthebox.com/api/v5` | v5 API base (machine lists) |

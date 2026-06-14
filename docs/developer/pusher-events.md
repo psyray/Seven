@@ -16,6 +16,29 @@ Collect live samples with `IS_DEV_INSTANCE=true` — events append to `LOG_DIR/P
 
 Auth: `POST ${HTB_APP_BASE}/pusher/auth` with Bearer `HTB_V4_TOKEN`.
 
+## Runtime routing (`NotificationRouter`)
+
+```
+HtbPusherSubscription [pusher-htb.js]
+  → NotificationRouter.handlePusherEvent()
+    → handleOwnEvent / handleLaunchEvent / handleTeamNotification / handleDefaultEvent
+    → sendAnnouncement() → DISCORD_ANNOUNCE_CHAN (discord.js v12: { embed, allowedMentions })
+    → recordEvent() → NotificationStore → seven_notification_events
+    → integratePusherOwn/Blood + debounced updateCache (skipped on forceRepost)
+```
+
+| Mechanism | Purpose |
+|-----------|---------|
+| Announce queue | Buffers embeds until Discord channel is ready (`client.on("ready")`) |
+| `announcedOwnKeys` | In-memory dedup for fallback poll (not cleared by HTB cache refresh) |
+| Fallback poll | `getRecentMemberActivities()` every `PUSHER_FALLBACK_POLL_MS` (even when Pusher healthy) |
+| Reconnect catch-up | After Pusher down ≥15s, one-shot activity poll |
+| Channel resubscribe | On `disconnected → connected`, re-subscribes all Pusher channels |
+| Admin status | `seven pusher status` — connection, queue, fallback poll stats |
+| Captain recovery | `seven pusher history` / `seven pusher repost last\|<id>` |
+
+Config toggles: `helpers/pusher-config.js` + `PUSHER_*` env vars (see [environment.md](../admin/environment.md)).
+
 ## Parsed fields
 
 | Field | Type | Description |
@@ -117,5 +140,19 @@ Expected: `{ uid: 12345, type: "respect" }`
 2. Ensure dev log path is writable (`LOG_DIR` in Docker, `./cache/` locally)
 3. Run bot; owns append to the log file
 4. Replay samples: `npm run test:pusher`
+
+## Persistence (`seven_notification_events`)
+
+`NotificationRouter.recordEvent()` writes every handled Pusher/fallback event to Postgres via `helpers/notification-store.js`:
+
+| Column | Content |
+|--------|---------|
+| `uid`, `member_name` | HTB member |
+| `event_type`, `target`, `flag`, `blood` | Parsed own/notification |
+| `channel`, `source` | Pusher channel name |
+| `note` | e.g. `announced own`, `skipped: …`, `reposted own` |
+| `announced` | Whether embed was sent to `DISCORD_ANNOUNCE_CHAN_ID` |
+
+Captain commands (local NLP, no Dialogflow): `seven pusher history [member]`, `seven pusher repost last|<id>`. Repost rebuilds the message from DB and calls `handleOwnEvent({ forceRepost: true })` — skips `integratePusherOwn/Blood` to avoid double-counting stats.
 
 See also [`docs/user/notifications.md`](../user/notifications.md).

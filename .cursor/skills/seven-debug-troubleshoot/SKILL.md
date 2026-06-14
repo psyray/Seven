@@ -17,7 +17,7 @@ description: >-
 | Live tail | `npm run docker:logs` |
 | Console | stdout in docker logs (winston mirrors to console) |
 
-Logger modules: `[bot]`, `[datastore]`, `[htb-api]`, `[pusher-htb]`, `[notification-router]`
+Logger modules: `[bot]`, `[datastore]`, `[htb-api]`, `[pusher-htb]`, `[notification-router]`, `[notification-store]`
 
 ## Diagnostic flow
 
@@ -46,25 +46,30 @@ Logger modules: `[bot]`, `[datastore]`, `[htb-api]`, `[pusher-htb]`, `[notificat
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| `Non-JSON HTML response` | Expired/invalid token | Regenerate `HTB_V4_TOKEN` |
+| `Non-JSON HTML response` | Expired/invalid OAuth token | Re-login; `seven set htb tokens` or update `HTB_TOKEN_FILE` + `HTB_ENV_FILE` |
+| `No live own announces` | Pusher silent or bad Bearer token | `seven pusher status`; fallback poll should still catch owns — check logs |
 | `embed.description required` | Empty embed path | Add `.setDescription()` in embeds.js |
 | `Object.values` on null | Uninitialized cache | Guard with `\|\| {}` in resolveEnt |
 | Sync stuck at 4/5 | Large team + rate limits | Normal — check rate-limit wait logs |
 | DialogFlow entity error | Malformed flag data | Fix `extractSpecialTargetFlagNames()` |
 | `password authentication failed` | Postgres volume password | See seven-docker-ops skill |
 | 0 machines after clear cache | Token or API base wrong | Verify `HTB_API_BASE` and token |
-| No live own announces | Pusher down or bad token | `seven pusher status`; check `HTB_V4_TOKEN` (Pusher auth) |
-| Owns missed at boot | Channel not ready yet | Should queue — verify `DISCORD_ANNOUNCE_CHAN_ID`; restart if queue stuck |
+| Token refresh fails on 2nd boot | Stale `.env` refresh vs `HTB_TOKEN_FILE` | Set both `HTB_TOKEN_FILE` + `HTB_ENV_FILE`; or `seven set htb tokens` |
+| Owns missed at boot | Channel not ready yet | Should queue — verify `DISCORD_ANNOUNCE_CHAN_ID`; captain `seven pusher repost last` |
+| Own in history but not in channel | Pusher silent or send failed | Captain: `seven pusher history` → note column; `seven pusher repost <id>` |
+| Repost fails target/member | Stale cache | `seven force update` then retry repost |
 | No @mention on own | Account not linked | Link HTB↔Discord; check `PUSHER_MENTION_ON_OWN` |
 | Lab own not parsed | HTML format change | `IS_DEV_INSTANCE=true` → inspect `LOG_DIR/PUSHER_MSG_LOG.json` (Docker) or `cache/PUSHER_MSG_LOG.json` (local); update parser |
 
 ## Pusher diagnostics
 
-1. Admin: `seven pusher status` — connection state, queue size, recent events
-2. Logs: `[pusher-htb]` state changes, `[notification-router]` fallback polls
-3. Staging capture: `IS_DEV_INSTANCE=true` → `LOG_DIR/PUSHER_MSG_LOG.json` (Docker) or `cache/PUSHER_MSG_LOG.json` (local)
-4. Parser regression: `npm run test:pusher`
-5. Fallback: when Pusher unhealthy, polls `team/activity` every `PUSHER_FALLBACK_POLL_MS`
+1. Admin: `seven pusher status` — connection state, queue size, recent in-memory events
+2. Captain: `seven pusher history` — persisted rows in `seven_notification_events` (Postgres)
+3. Captain recovery: `seven pusher repost last` or `seven pusher repost <id>` — bypasses filters/dedup; does not re-integrate HTB stats
+4. Logs: `[pusher-htb]` state changes, `[notification-router]` fallback polls, `[notification-store]` schema/load warnings
+5. Staging capture: `IS_DEV_INSTANCE=true` → `LOG_DIR/PUSHER_MSG_LOG.json` (Docker) or `cache/PUSHER_MSG_LOG.json` (local)
+6. Parser regression: `npm run test:pusher`
+7. Fallback: polls member activity every `PUSHER_FALLBACK_POLL_MS` (even when Pusher healthy)
 
 See `docs/developer/pusher-events.md` for expected HTML formats.
 
@@ -91,6 +96,10 @@ Admin commands:
 - `seven clear the cache` (admin) → full re-fetch
 - `seven pusher status` (admin) → Pusher connection + announce queue
 
+Captain commands:
+- `seven pusher history [member]` → Postgres notification log
+- `seven pusher repost last|<id>` → force announce embed (captain only)
+
 ## DialogFlow entity sync errors
 
 ```
@@ -110,5 +119,5 @@ Field [object Object] did not exist
 ## Do not
 
 - Log or commit tokens/secrets
-- Assume password login can refresh HTB token (removed — App Token only)
+- Assume password login or static App Token can refresh HTB session (removed — OAuth pair only)
 - Run `docker:reset-db` without warning user about data loss

@@ -12,7 +12,7 @@ Seven connects to Hack The Box using **OAuth access/refresh tokens** on the v4 A
 | Refresh | `POST ${HTB_API_BASE}/login/refresh` with `{ refresh_token }` — automatic when access expires within 120s |
 | Persistence | `HTB_TOKEN_FILE` JSON + optional `HTB_ENV_FILE` `.env` sync after each refresh |
 | Load order | `HTB_TOKEN_FILE` first, then `.env` — never mix stale `.env` refresh with file access token |
-| Hot-reload | Discord `seven set htb tokens <access> <refresh>` or watch `HTB_TOKEN_FILE` |
+| Hot-reload | Discord `seven set htb tokens <access> <refresh>` (local NLP) or watch `HTB_TOKEN_FILE` |
 
 Obtain the token pair: log in on [labs.hackthebox.com](https://labs.hackthebox.com) via browser → DevTools → Network → capture `login/refresh` response (`message.access_token` + `message.refresh_token`).
 
@@ -88,7 +88,7 @@ Helper methods:
 | `HTB_V4_TOKEN` | Yes | — | OAuth access token (JWT) |
 | `HTB_REFRESH_TOKEN` | Yes | — | OAuth refresh token |
 | `HTB_TOKEN_FILE` | No | — | JSON file for token persistence and hot-reload (startup priority) |
-| `HTB_ENV_FILE` | No | — | `.env` path synced after each refresh |
+| `HTB_ENV_FILE` | No | — | `.env` path synced after each refresh (`helpers/env-tokens.js`) |
 | `HTB_TOKEN_EXPIRY_WARN_DAYS` | No | 1 | Days before access expiry to alert admins |
 | `HTB_TEAM_ID` | Yes* | — | Team ID |
 | `HTB_UNIVERSITY_ID` | Alt* | — | University instead of team |
@@ -123,6 +123,12 @@ Table `seven_data`: JSON columns per entity type.
 - `importDbBackup()` on startup
 - `updateCache()` after sync
 
+Table `seven_notification_events`: Pusher/fallback event log (see [pusher-events.md](pusher-events.md)).
+
+## Optional member profile paths
+
+Some v4 member sub-endpoints return 404 for members without optional data (e.g. certain lab progress). `isOptionalMemberProfilePath()` in `htb-api.js` treats these as empty instead of failing bulk member sync.
+
 ## Real-time notifications (fallback API)
 
 When Pusher is unhealthy, `NotificationRouter` polls member activity via:
@@ -131,7 +137,9 @@ When Pusher is unhealthy, `NotificationRouter` polls member activity via:
 
 Note: `GET team/activity/{teamId}` often returns **401** with OAuth v4 tokens — do not use it for fallback.
 
-Used for catch-up after sustained disconnect (≥15s) and periodic fallback (`PUSHER_FALLBACK_POLL_MS`). Live owns still come primarily from Pusher (`helpers/pusher-htb.js`).
+Used for catch-up after sustained Pusher disconnect (≥15s) and periodic fallback (`PUSHER_FALLBACK_POLL_MS`, **always active**). Live owns still come primarily from Pusher (`helpers/pusher-htb.js`).
+
+Fallback deduplication uses in-memory `announcedOwnKeys` in `NotificationRouter` (separate from HTB cache — survives `force update` without blocking re-announce of new owns).
 
 See [Pusher event formats](pusher-events.md) and [user notifications](../user/notifications.md).
 

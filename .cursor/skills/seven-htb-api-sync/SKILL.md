@@ -12,7 +12,8 @@ description: >-
 
 1. Read `config/htb.js`, `modules/htb-api.js`, `models/SevenDatastore.js`
 2. Check `AGENTS.md` sync modes table
-3. Confirm token model: `HTB_V4_TOKEN` only (no v3, no password refresh)
+3. Confirm token model: `HTB_V4_TOKEN` + `HTB_REFRESH_TOKEN` (OAuth — no v3, no App Token without refresh)
+4. Persistence: `HTB_TOKEN_FILE` (priority load) + `HTB_ENV_FILE` (`.env` sync via `helpers/env-tokens.js`)
 
 ## Sync architecture
 
@@ -35,7 +36,8 @@ DAT.update(options)
 | Wipe and re-fetch all | `update({ full: true })` via admin clear cache |
 | Missing machines for member sync | `getMemberSyncDependencies()` auto-expands |
 | New HTB endpoint | Add to `htb-api.js`, wire in correct `update()` phase |
-| Pusher fallback / live owns | `getRecentTeamActivity()` in `htb-api.js`; wired by `notification-router.js` |
+| Pusher fallback / live owns | `getRecentMemberActivities()` in `htb-api.js`; wired by `notification-router.js` |
+| Notification event log | `helpers/notification-store.js` → Postgres `seven_notification_events` (not part of HTB sync cache) |
 
 ## htb-api.js checklist
 
@@ -59,7 +61,9 @@ Verify logs show skipped sections when cache is warm:
 
 ## Common pitfalls
 
-- **Token expired**: HTML response instead of JSON → check `HTB_V4_TOKEN`
+- **Token expired**: HTML response instead of JSON → refresh or re-login; check file vs `.env` mismatch
+- **Second Docker boot fails auth**: stale `.env` refresh token — set `HTB_TOKEN_FILE` + `HTB_ENV_FILE`
+- **Force update breaks fallback dedup**: should not — `announcedOwnKeys` is separate from HTB cache
 - **Empty team embed**: `TEAM_STATS` or `TEAM_MEMBERS` empty → run force update
 - **Rate limit silence**: ensure wait logs fire above `HTB_RATE_LIMIT_WAIT_THRESHOLD_MS`
 - **Re-fetching everything on startup**: broken `hasCachedObject()` / missing `hydrateFromDbBackup()`

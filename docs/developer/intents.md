@@ -38,7 +38,10 @@ Dialogflow intents map to handlers in the `switch` block of `bot.js`. Parameters
 |--------|-------|---------|
 | `admin.forceUpdateData` | Captain or admin | `forceUpdate()` → `refresh({ force: true })` |
 | `admin.clearCached` | Admin | `admin_clearCached()` → `refresh({ full: true })` |
+| `admin.setHtbTokens` | Admin | `admin_setHtbTokens()` — hot-reload OAuth pair + persistence |
 | `admin.pusherStatus` | Admin | `NOTIFICATION_ROUTER.getStatusEmbed()` |
+| `captain.pusherHistory` | Captain | `NOTIFICATION_ROUTER.getHistoryEmbed()` → `EGI.pusherHistory()` |
+| `captain.pusherRepost` | Captain | `NOTIFICATION_ROUTER.repostToChannel()` → `handleOwnEvent({ forceRepost: true })` |
 | `admin.setStatus` | Admin | `admin_setStatus()` |
 | `admin.setupEmoji` | — | `E.initCustEmoji()` |
 | `admin.clearEmoji` | — | `E.clearCustEmoji()` |
@@ -58,6 +61,15 @@ Dialogflow intents map to handlers in the `switch` block of `bot.js`. Parameters
 When Dialogflow doesn't match an intent, `resolveEnt()` tries to match the message text to a cached HTB entity (machine, challenge, member, etc.) and returns an info card.
 
 Local NLP overrides in `helpers/nlp.js` (`resolveLocalIntent()`) can correct or pre-resolve intents before the switch runs.
+
+Captain/admin Pusher commands (no Dialogflow intent required):
+
+| Phrase | Local intent |
+|--------|--------------|
+| `pusher status` | `admin.pusherStatus` |
+| `set htb tokens <access> <refresh>` | `admin.setHtbTokens` |
+| `pusher history` / `pusher history <member>` | `captain.pusherHistory` |
+| `pusher repost last` / `pusher repost <id>` | `captain.pusherRepost` |
 
 ## Common parameters
 

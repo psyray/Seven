@@ -8,7 +8,7 @@ This guide covers the developer workflow. For architecture details, see [AGENTS.
 
 - **Node.js 20+** (matches the Docker image)
 - **Docker Compose** (recommended for local dev)
-- **Hack The Box App Token** — generate at [app.hackthebox.com](https://app.hackthebox.com) → Profile → Settings → App Tokens
+- **Hack The Box OAuth tokens** — browser login on [labs.hackthebox.com](https://labs.hackthebox.com): `HTB_V4_TOKEN` + `HTB_REFRESH_TOKEN` (see [setup.md](docs/admin/setup.md))
 - **Google Cloud Dialogflow** project with service account credentials
 - **Discord bot** application and server permissions
 
@@ -20,7 +20,7 @@ cd Seven
 npm install
 
 cp static/templates/.env.docker.example .env
-# Fill BOT_TOKEN, HTB_V4_TOKEN, GOOGLE_*, DISCORD_*, HTB_TEAM_ID, POSTGRES_PASSWORD
+# Fill BOT_TOKEN, HTB_V4_TOKEN, HTB_REFRESH_TOKEN, GOOGLE_*, DISCORD_*, HTB_TEAM_ID, POSTGRES_PASSWORD
 
 npm run docker:up
 npm run docker:logs
@@ -89,7 +89,7 @@ npm run test:all
 | `npm run test:handler` | Intent handlers with fixture cache | None |
 | `npm run test:charts` | Puppeteer/Highcharts rendering | Chromium (included in Docker) |
 | `npm run test:e2e` | Live Discord help audit | `SMOKE_DISCORD_TOKEN`, `SMOKE_BOT_USER_ID` |
-| `npm run test:logs` | Parse smoke log output | Prior smoke run |
+| `npm run test:pusher` | Pusher HTML parser | `cache/PUSHER_SAMPLE_EVENTS.json` |
 
 Optional live Dialogflow: `SMOKE_LIVE_DF=1 npm run test:intents`
 
@@ -109,10 +109,11 @@ Workflow reference: `.cursor/skills/seven-discord-feature/SKILL.md`
 
 ## HTB API changes
 
-Seven uses **v4-only authentication** (`HTB_V4_TOKEN` App Token). There is no password login, no v3 session, and no automatic token refresh.
+Seven uses **OAuth access + refresh tokens** on the v4 API (`HTB_V4_TOKEN` + `HTB_REFRESH_TOKEN`). Automatic refresh via `POST /login/refresh`; persist with `HTB_TOKEN_FILE` + optional `HTB_ENV_FILE`. No password login, no v3 session, no static App Token without refresh.
 
 - Machine **lists** come from **v5** (`modules/htb-api.js` → `getMachinesV5()`).
 - Machine **profiles** are enriched via **v4** selectively (retired or owned machines).
+- Pusher **fallback** uses `user/profile/activity/{id}` — not `team/activity`.
 - Sync orchestration lives in `models/SevenDatastore.js`.
 
 Do **not** reintroduce legacy connectors or `HTB_LEGACY_*` variables.

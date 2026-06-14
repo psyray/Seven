@@ -1,6 +1,6 @@
 ---
 description: Charts rendering, Pusher notifications, and optional API server
-globs: "{modules/charts/**,helpers/pusher-htb.js,helpers/notification-router.js,helpers/pusher-config.js,bot.js,views/embeds.js,modules/seven-api-server.js,modules/seven-api-connector.js}"
+globs: "{modules/charts/**,helpers/pusher-htb.js,helpers/notification-router.js,helpers/notification-store.js,helpers/pusher-config.js,bot.js,views/embeds.js,modules/seven-api-server.js,modules/seven-api-connector.js}"
 alwaysApply: false
 ---
 
@@ -20,13 +20,18 @@ Flow: `helpers/pusher-htb.js` (parse HTML) → `helpers/notification-router.js` 
 | Module | Role |
 |--------|------|
 | `helpers/pusher-htb.js` | Pusher client, `parsePusherEvent()`, logs via `createLogger("pusher-htb")` |
-| `helpers/notification-router.js` | Announce queue, `@mentions`, cache debounce, fallback poll, admin status |
+| `helpers/notification-router.js` | Announce queue, `@mentions`, cache debounce, fallback poll, captain history/repost |
+| `helpers/notification-store.js` | Postgres `seven_notification_events` — append/list/repost source rows |
 | `helpers/pusher-config.js` | `PUSHER_*` env toggles |
 
 - Pusher subscribes at startup (before Discord `ready`); pending announces queue until channel is fetched
 - Own filter: team member **or** first blood **or** linked Discord account
-- Fallback: `getRecentTeamActivity()` when Pusher unhealthy (`PUSHER_FALLBACK_POLL_MS`)
-- Admin: `admin.pusherStatus` / `seven pusher status`
+- Fallback: `getRecentMemberActivities()` when Pusher unhealthy (`PUSHER_FALLBACK_POLL_MS`); poll also runs while healthy
+- Persist: `NotificationRouter.recordEvent()` → `NotificationStore.append()` (all paths incl. skipped)
+- Boot: `importDbBackup()` → `NOTIFICATION_STORE.ensureSchema()` → `NOTIFICATION_ROUTER.initFromStore()`
+- Admin: `admin.pusherStatus` / `seven pusher status` (connection + 25-item memory buffer)
+- Captain: `captain.pusherHistory` / `captain.pusherRepost` — DB history + `handleOwnEvent({ forceRepost: true })` (no stat re-integration)
+- Local NLP: patterns in `helpers/nlp.js` (`pusher history`, `pusher repost last|<id>`)
 - Dev: `IS_DEV_INSTANCE=true` appends to `LOG_DIR/PUSHER_MSG_LOG.json` (Docker) or `cache/PUSHER_MSG_LOG.json` (local); replay via `npm run test:pusher`
 - Event formats: `docs/developer/pusher-events.md`
 
