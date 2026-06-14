@@ -14,7 +14,8 @@
 		"test:intents": "node scripts/intent-smoke.js",
 		"test:handler": "node scripts/handler-smoke.js",
 		"test:charts": "node scripts/chart-smoke.js",
-		"test:all": "npm run test:intents && npm run test:handler && npm run test:charts",
+		"test:pusher": "node scripts/pusher-smoke.js",
+		"test:all": "npm run test:intents && npm run test:handler && npm run test:charts && npm run test:pusher",
 		"test:e2e": "node scripts/e2e-help-audit.js",
 		"test:logs": "node scripts/analyze-seven-logs.js",
 		"doc:generate": "jsdoc -c jsdoc.config.json"

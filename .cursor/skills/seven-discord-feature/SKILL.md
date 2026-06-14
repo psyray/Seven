@@ -84,18 +84,45 @@ Messages matching HTB entity names bypass DialogFlow via `DAT.resolveEnt(message
 |--------|----------|-----------|
 | `admin.forceUpdateData` | `forceUpdate()` | `{ force: true }` |
 | `admin.clearCached` | `admin_clearCached()` | `{ full: true }` |
+| `admin.pusherStatus` | `NOTIFICATION_ROUTER.getStatusEmbed()` | — |
+
+## Pusher real-time notifications
+
+```
+HTB Pusher → parsePusherEvent [pusher-htb.js]
+  → NotificationRouter.handlePusherEvent [notification-router.js]
+    → HtbEmbeds.pusherOwn / pusherNotif / pusherTeamNotification
+    → DISCORD_ANNOUNCE_CHAN (with allowedMentions for linked users)
+    → integratePusherOwn/Blood + debounced updateCache
+```
+
+When extending notification types:
+
+1. Parse in `helpers/pusher-htb.js` (`parsePusherEvent`)
+2. Route in `helpers/notification-router.js` (`OWN_TYPES`, config filters)
+3. Embed in `views/embeds.js` (`pusherOwn`, `pusherTeamNotification`)
+4. Cache in `SevenDatastore.integratePusherOwn()` if query commands need live data
+5. Sample HTML in `cache/PUSHER_SAMPLE_EVENTS.json` + `npm run test:pusher`
+
+Mentions: `DAT.getDiscordMention(uid)` + `allowedMentions: { users: [id] }` — not `tryDiscordifyUid` alone.
+
+Config: `PUSHER_*` vars via `helpers/pusher-config.js` (see `static/templates/.env.docker.example`).
 
 ## Testing
 
 1. Start bot with populated cache (`docker:logs` shows member/machine counts > 0)
 2. Test in Discord: `seven team info`, `seven <machinename>`, `seven <username> rank`
 3. Test empty cache: clear → verify graceful embeds, not crashes
+4. Pusher parser: `npm run test:pusher`
+5. Admin status: `seven pusher status`
 
 ## Key files
 
-- `bot.js` — intent switch, admin guards (`isAdmin`, `isCaptain`)
-- `views/embeds.js` — all embed builders
+- `bot.js` — intent switch, admin guards (`isAdmin`, `isCaptain`), wires `NotificationRouter`
+- `views/embeds.js` — all embed builders (`pusherOwn`, `pusherStatus`, …)
 - `modules/send.js` — delivery, typing simulation
 - `helpers/emoji.js` — custom HTB emoji
-- `helpers/pusher-htb.js` — achievement announcements
+- `helpers/pusher-htb.js` — Pusher client + HTML parser
+- `helpers/notification-router.js` — announce routing, queue, fallback
+- `helpers/pusher-config.js` — `PUSHER_*` env config
 - `static/strings.js` — help text, canned responses

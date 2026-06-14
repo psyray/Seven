@@ -38,6 +38,7 @@ Dialogflow intents map to handlers in the `switch` block of `bot.js`. Parameters
 |--------|-------|---------|
 | `admin.forceUpdateData` | Captain or admin | `forceUpdate()` → `refresh({ force: true })` |
 | `admin.clearCached` | Admin | `admin_clearCached()` → `refresh({ full: true })` |
+| `admin.pusherStatus` | Admin | `NOTIFICATION_ROUTER.getStatusEmbed()` |
 | `admin.setStatus` | Admin | `admin_setStatus()` |
 | `admin.setupEmoji` | — | `E.initCustEmoji()` |
 | `admin.clearEmoji` | — | `E.clearCustEmoji()` |

@@ -172,6 +172,7 @@ Available to captains and admins:
 Available to admins only:
 
 - `set htb tokens <access_jwt> <refresh>` — hot-reload OAuth pair without restart
+- `pusher status` — Pusher connection, announce queue, recent events
 - `clear cache` — wipe memory + full HTB refresh
 - `set status …` — Discord status/activity
 - `setup emoji` / `clear emoji` — HTB custom emoji on guild

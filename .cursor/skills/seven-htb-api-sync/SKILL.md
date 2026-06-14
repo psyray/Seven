@@ -35,6 +35,7 @@ DAT.update(options)
 | Wipe and re-fetch all | `update({ full: true })` via admin clear cache |
 | Missing machines for member sync | `getMemberSyncDependencies()` auto-expands |
 | New HTB endpoint | Add to `htb-api.js`, wire in correct `update()` phase |
+| Pusher fallback / live owns | `getRecentTeamActivity()` in `htb-api.js`; wired by `notification-router.js` |
 
 ## htb-api.js checklist
 

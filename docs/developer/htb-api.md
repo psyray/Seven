@@ -121,6 +121,16 @@ Table `seven_data`: JSON columns per entity type.
 - `importDbBackup()` on startup
 - `updateCache()` after sync
 
+## Real-time notifications (fallback API)
+
+When Pusher is unhealthy, `NotificationRouter` polls:
+
+- `GET team/activity/{teamId}` via `HtbApiConnector.getRecentTeamActivity(teamId, sinceMs)`
+
+Used for catch-up on reconnect and periodic fallback (`PUSHER_FALLBACK_POLL_MS`). Live owns still come primarily from Pusher (`helpers/pusher-htb.js`).
+
+See [Pusher event formats](pusher-events.md) and [user notifications](../user/notifications.md).
+
 ## Debugging
 
 ```bash

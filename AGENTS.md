@@ -33,7 +33,9 @@ helpers/
   logger.js         Winston logger (createLogger)
   classes.js        Domain wrappers (HtbMachine, TeamMember, …)
   dflow.js          DialogFlow entity sync
-  pusher-htb.js     Real-time HTB achievement notifications
+  pusher-htb.js     HTB Pusher client + HTML event parser
+  notification-router.js  Real-time own routing, mentions, fallback poll
+  pusher-config.js  PUSHER_* env toggles
 config/
   htb.js            HTB_API_BASE, HTB_API_V5_BASE, HTB_APP_BASE
 static/
@@ -47,6 +49,7 @@ static/
 2. **Sync**: `DAT.update()` fetches missing sections from HTB API (smart partial sync)
 3. **Query**: User message → DialogFlow intent OR `resolveEnt()` → `HtbEmbeds` → `Send.embed()`
 4. **Persist**: `updateCache()` writes in-memory state back to Postgres
+5. **Real-time owns**: HTB Pusher → `NotificationRouter` → announce channel + debounced cache update
 
 ## HTB API (v4 OAuth auth)
 
@@ -96,6 +99,7 @@ Use `createLogger("module-name")` from `helpers/logger.js`. Logs go to console +
 
 - `admin.forceUpdateData` → smart team sync (`force: true`)
 - `admin.clearCached` → wipe memory + full refresh (`full: true`)
+- `admin.pusherStatus` → Pusher connection, announce queue, recent events
 - `getTeamInfo`, `getMemberRank`, `getTargetInfo`, … → see `bot.js` switch and [docs/developer/intents.md](docs/developer/intents.md)
 
 ## References

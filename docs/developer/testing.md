@@ -8,7 +8,7 @@ Seven includes offline smoke tests that run without Discord or live HTB API acce
 npm run test:all
 ```
 
-Runs: `test:intents` → `test:handler` → `test:charts`
+Runs: `test:intents` → `test:handler` → `test:charts` → `test:pusher`
 
 ## Test layers
 
@@ -17,8 +17,9 @@ Runs: `test:intents` → `test:handler` → `test:charts`
 | 1 — Intents | `scripts/intent-smoke.js` | Local NLP, embed safety, help prompt catalog |
 | 2 — Handlers | `scripts/handler-smoke.js` | Full intent handlers with fixture cache |
 | 3 — Charts | `scripts/chart-smoke.js` | Puppeteer/Highcharts rendering |
-| 4 — E2E (optional) | `scripts/e2e-help-audit.js` | Live Discord help audit |
-| 5 — Logs (optional) | `scripts/analyze-seven-logs.js` | Parse smoke log output |
+| 4 — Pusher | `scripts/pusher-smoke.js` | HTB Pusher HTML parsing (`cache/PUSHER_SAMPLE_EVENTS.json`) |
+| 5 — E2E (optional) | `scripts/e2e-help-audit.js` | Live Discord help audit |
+| 6 — Logs (optional) | `scripts/analyze-seven-logs.js` | Parse smoke log output |
 
 ## Fixture data
 
@@ -55,6 +56,10 @@ Runs intent handlers through `helpers/smoke-handler.js` with fixture cache. Vali
 ## Chart smoke (`npm run test:charts`)
 
 Renders sample charts via Puppeteer. Requires Chromium (included in Docker image).
+
+## Pusher smoke (`npm run test:pusher`)
+
+Parses sample HTB Pusher HTML payloads from `cache/PUSHER_SAMPLE_EVENTS.json` via `parsePusherEvent()`. Extend samples when HTB changes shoutbox HTML (see `docs/developer/pusher-events.md`).
 
 ## E2E help audit (`npm run test:e2e`)
 

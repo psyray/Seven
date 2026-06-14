@@ -907,6 +907,10 @@ class SevenDatastore {
 					case "fortress":
 					case "prolab":
 						return this.getSpecialByName(kwd, targetType)
+					case "starting_point":
+						return isIdLookup
+							? this.getMachineById(kwd)
+							: this.getMachineByName(kwd)
 					default:
 						console.warn(
 							`Resolving datastore entity ${isIdLookup ? "by ID" : ""
@@ -1213,7 +1217,13 @@ class SevenDatastore {
 						.map((own) => ({ ...own, id: member.id }))
 					break
 				case "prolab":
-					validOwns = []
+					validOwns = member.activity
+						.filter(
+							(own) =>
+								own.object_type == target.type &&
+								(H.ciEquals(own.name, target.name) || H.ciEquals(own.name, target.company?.name))
+						)
+						.map((own) => ({ ...own, id: member.id }))
 					break
 				default:
 					break
@@ -1436,6 +1446,20 @@ class SevenDatastore {
 	 * @param {number} uid
 	 * @returns {(string|"[Invalid ID]")}
 	 */
+	getDiscordUserId(uid) {
+		if (!(uid in this.D_STATIC)) return null
+		const dcMem = this.D_STATIC[uid]
+		return H.sAcc(dcMem, "id") || H.sAcc(dcMem, "userID") || null
+	}
+
+	getDiscordMention(uid, isSelf = false, showBothNames = true) {
+		const discordId = this.getDiscordUserId(uid)
+		if (discordId && process.env.PUSHER_MENTION_ON_OWN !== "false") {
+			return `<@${discordId}>${isSelf ? " [You]" : ""}`
+		}
+		return this.tryDiscordifyUid(uid, isSelf, showBothNames)
+	}
+
 	tryDiscordifyUid(uid, isSelf = false, showBothNames = true) {
 		if (uid in this.TEAM_MEMBERS) {
 			if (uid in this.D_STATIC) {
@@ -1455,6 +1479,22 @@ class SevenDatastore {
 			}
 		} else {
 			return null
+		}
+	}
+
+	incrementTeamStatsFromOwn(flag, type, isBlood = false) {
+		if (!this.TEAM_STATS) return
+		if (flag === "user") {
+			this.TEAM_STATS.user_owns = (this.TEAM_STATS.user_owns || 0) + 1
+		}
+		if (flag === "root") {
+			this.TEAM_STATS.system_owns = (this.TEAM_STATS.system_owns || 0) + 1
+		}
+		if (isBlood) {
+			this.TEAM_STATS.first_bloods = (this.TEAM_STATS.first_bloods || 0) + 1
+		}
+		if (type === "challenge" && flag === "challenge") {
+			this.TEAM_STATS.challenge_owns = (this.TEAM_STATS.challenge_owns || 0) + 1
 		}
 	}
 
@@ -1597,6 +1637,54 @@ class SevenDatastore {
 				`[PUSHER INTEGRATION]::: Resolved member ${member.name} [${member.id}] and target ${target.name} [${target.type}]`
 			)
 			try {
+				if (["endgame", "fortress", "prolab"].includes(type)) {
+					const flagTitle = flag && !["endgame", "fortress", "prolab"].includes(flag) ? flag : null
+					const labOwn = member.activity.find(
+						(own) =>
+							own.object_type == target.type &&
+							(own.name == target.name || own.id == target.id) &&
+							(!flagTitle || H.ciEquals(own.flag_title, flagTitle))
+					)
+					if (!labOwn) {
+						member.activity.push({
+							date: new Date(time).toISOString(),
+							date_diff: F.timeSince(new Date(time)),
+							object_type: target.type,
+							type: target.type,
+							id: target.id,
+							name: target.name,
+							flag_title: flagTitle,
+							points: target.points,
+						})
+						entriesAffected = true
+						console.log(isPusher ? `Added ${target.type} own for ${member.name}` : "")
+					}
+					return entriesAffected
+				}
+
+				if (type === "starting_point") {
+					const spOwn = member.activity.find(
+						(own) =>
+							own.object_type == "machine" &&
+							(own.name == target.name || own.id == target.id) &&
+							own.type == (flag || "user")
+					)
+					if (!spOwn) {
+						member.activity.push({
+							date: new Date(time).toISOString(),
+							date_diff: F.timeSince(new Date(time)),
+							object_type: "machine",
+							type: flag || "user",
+							id: target.id,
+							name: target.name,
+							points: target.points,
+							machine_avatar: target.avatar,
+						})
+						entriesAffected = true
+					}
+					return entriesAffected
+				}
+
 				switch (flag || type) {
 					case "user":
 						var userOwn = member.activity.find(
@@ -1655,7 +1743,7 @@ class SevenDatastore {
 					case "challenge":
 						var challOwn = member.activity.find(
 							(own) =>
-								own.type == "root" &&
+								own.type == "challenge" &&
 								(own.name == target.name || own.id == target.id)
 						)
 						if (!challOwn) {

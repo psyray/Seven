@@ -28,6 +28,7 @@ const dflow = new dialogflow.SessionsClient({ credentials: JSON.parse(process.en
 const strings = require("./static/strings")
 const { Helpers: H } = require("./helpers/helpers.js")
 const { HtbPusherSubscription } = require("./helpers/pusher-htb")
+const { NotificationRouter } = require("./helpers/notification-router")
 const pgp = require("pg-promise")({ capSQL: true })
 const htbCharts = require("./modules/charts/index_new.js")
 const { HtbEmbeds } = require("./views/embeds.js")
@@ -77,9 +78,9 @@ if (IS_DEV_INSTANCE) {
 
 var DISCORD_ANNOUNCE_CHAN = false         // The Discord Channel object intended to recieve Pusher achievements.
 var HTB_PUSHER_OWNS_SUBSCRIPTION = false  // The Pusher Client own channel subscription.
+var NOTIFICATION_ROUTER = null
 const SEVEN_DB_TABLE_NAME = "seven_data"
 var PUSHER_MSG_LOG = DEV_MODE_ON ? require("./cache/PUSHER_MSG_LOG.json") : null
-const LAUNCH_TARGETS_DEBOUNCE_CACHE = []
 
 const CHART_RENDERER = htbCharts
 const DAT = new SevenDatastore()    // Open an abstract storage container for HTB / bot data
@@ -519,6 +520,29 @@ async function main() {
 			{ channel: "joins-channel", event: "display-info" }
 		], DAT.V4API.getApiToken())
 
+	NOTIFICATION_ROUTER = new NotificationRouter({
+		dat: DAT,
+		embeds: EGI,
+		getAnnounceChannel: () => DISCORD_ANNOUNCE_CHAN,
+		updateCache,
+		notifyAdmins,
+		getTeamId: () => DAT.TEAM_STATS?.id,
+	})
+
+	HTB_PUSHER_OWNS_SUBSCRIPTION.on("pusherevent", async message => {
+		if (DEV_MODE_ON) {
+			PUSHER_MSG_LOG.push(message)
+			fs.writeFileSync("./cache/PUSHER_MSG_LOG.json", JSON.stringify(PUSHER_MSG_LOG, null, 2))
+		}
+		await NOTIFICATION_ROUTER.handlePusherEvent(message)
+	})
+
+	HTB_PUSHER_OWNS_SUBSCRIPTION.on("state_change", states => {
+		NOTIFICATION_ROUTER.onPusherStateChange(states, client)
+	})
+
+	NOTIFICATION_ROUTER.startFallbackPolling()
+
 	if (!DEV_MODE_ON) {
 		await DAT.syncAgent()
 		try {
@@ -569,54 +593,6 @@ async function main() {
 		}, 1 * 60 * 60 * 1000)
 	}
 
-	HTB_PUSHER_OWNS_SUBSCRIPTION.on("pusherevent", async message => {
-		try {
-			if (DEV_MODE_ON) {
-				PUSHER_MSG_LOG.push(message)
-				let data = JSON.stringify(PUSHER_MSG_LOG, null, 2)
-				fs.writeFileSync("./cache/PUSHER_MSG_LOG.json", data)
-			}
-			switch (message.type) {
-			case "machine": case "challenge": case "endgame": case "fortress": case "prolab":
-				if (DAT.DISCORD_LINKS[message.uid] || message.blood || DAT.TEAM_MEMBERS[message.uid]) {
-					console.warn("PUSHER OWN::: ", message)
-					DISCORD_ANNOUNCE_CHAN.send(EGI.pusherOwn(await DAT.resolveEnt(message.uid, "member", true, null, true), message.target, message.type, message.flag || message.type, message.blood))
-					if (message.blood) {
-						console.log("This was detected to be a first blood celebration message!")
-						DAT.integratePusherBlood(await DAT.resolveEnt(message.uid, "member", true, null, true), message.uid, message.time, message.type, message.target, message.flag, true)
-						for (let i = 0; i < 3; i++) {
-							DISCORD_ANNOUNCE_CHAN.send("‼").then(message => message.delete())
-						}
-					}
-				}
-				if (DAT.TEAM_MEMBERS[message.uid]) {
-					console.warn("RELEVANT PUSHER OWN INCOMING::: ")
-					DAT.integratePusherOwn(message.uid, message.time, message.type, message.target, message.flag, true)
-				}
-				break
-			case "launch":
-				console.log("PUSHER: Got machine launch notification.")
-				console.log(message)
-				if (message.target && LAUNCH_TARGETS_DEBOUNCE_CACHE.some(e => e == message.target)) {
-					console.info("Debounced a launch message -- take that, entropy!")
-				} else {
-					LAUNCH_TARGETS_DEBOUNCE_CACHE.push(message.target)
-					DISCORD_ANNOUNCE_CHAN.send(EGI.pusherNotif(message))
-				}
-				break
-			default:
-				if (message.uid && DAT.DISCORD_LINKS[message.uid]) {
-					DISCORD_ANNOUNCE_CHAN.send(EGI.pusherNotif(message))
-				}
-				break
-			}
-		} catch (error) {
-			console.error(error)
-		}
-
-	})
-
-
 	client.login(process.env.BOT_TOKEN)               // BOT_TOKEN is the Discord client secret
 	client.on("disconnect", function (erMsg, code) {
 		console.warn("----- Bot disconnected from Discord with code", code, "for reason:", erMsg, "-----")
@@ -627,6 +603,9 @@ async function main() {
 		console.log("[DISCORD]::: CLIENT READY")
 
 		DISCORD_ANNOUNCE_CHAN = await client.channels.fetch(process.env.DISCORD_ANNOUNCE_CHAN_ID.toString())
+		if (NOTIFICATION_ROUTER) {
+			NOTIFICATION_ROUTER.setAnnounceChannelReady()
+		}
 		startHtbTokenExpiryMonitor(client)
 
 		if (pendingHtbAuthFailure) {
@@ -1048,6 +1027,7 @@ async function handleMessage(message) {
 						case "admin.passthruOn": if (isAdmin(message.author)) { SEND.human(message, `Parrot mode ${F.STL("ON", "bs")}. 🦜`); SEND.passthruOn() } else { SEND.human(message, "Sorry, not for you. 🦜") } break
 						case "admin.passthruOff": if (isAdmin(message.author)) { SEND.human(message, `Parrot mode ${F.STL("OFF", "bs")}. 🦜`); SEND.passthruOff() } else { SEND.human(message, "Sorry, not for you. 🦜") } break
 						case "admin.clearCached": await admin_clearCached(message); break
+						case "admin.pusherStatus": if (isAdmin(message.author)) { SEND.embed(message, NOTIFICATION_ROUTER.getStatusEmbed()) } else { SEND.human(message, "Sorry, not for you.") } break
 						case "admin.setStatus": admin_setStatus(message, inf); break
 						case "admin.clearEmoji": E.clearCustEmoji(client).then(SEND.human(message, "Successfully purged Seven-related emoji from supporting channel.", false)); break
 						case "admin.setupEmoji": E.initCustEmoji(client).then(SEND.human(message, "Successfully initialized Seven-related emoji on supporting channel.", false)); break

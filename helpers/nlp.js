@@ -168,6 +168,14 @@ function resolveLocalIntent(content, dfResult = null, decodedParams = null) {
 		}
 	}
 
+	if (/^pusher\s+status\s*$/.test(lower)) {
+		return {
+			intent: "admin.pusherStatus",
+			parameters: {},
+			allRequiredParamsPresent: true,
+		}
+	}
+
 	const teamLeaderPhrases = [
 		/who(?:'s| is)\s+(?:the\s+)?(?:number\s*|#\s*|no\.?\s*)?1(?:\s+(?:on|of|in)\s+(?:the\s+)?team)?/,
 		/who(?:'s| is)\s+on\s+top/,

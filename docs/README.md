@@ -33,6 +33,7 @@ Developing or extending Seven:
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — getting started, tests, PR workflow
 - [Developer guide](developer/README.md) — architecture and module index
 - [HTB API integration](developer/htb-api.md) — v4/v5 auth and sync
+- [Pusher event formats](developer/pusher-events.md) — real-time notification HTML
 - [Intent reference](developer/intents.md) — Dialogflow intent → handler map
 - [Charts & Puppeteer](developer/charts.md) — image rendering pipeline
 - [Testing](developer/testing.md) — smoke tests and fixtures
@@ -54,5 +55,6 @@ Regenerate after code changes: `npm run doc:generate`
 | Docker deployment | [admin/setup.md](admin/setup.md) |
 | HTB App Token | [admin/setup.md#hack-the-box-app-token](admin/setup.md) |
 | Force update vs clear cache | [admin/operations.md](admin/operations.md) |
+| Pusher notifications | [user/notifications.md](user/notifications.md) · [developer/pusher-events.md](developer/pusher-events.md) |
 | Link Discord to HTB | [user/privacy.md](user/privacy.md) |
 | Smoke tests | [developer/testing.md](developer/testing.md) |

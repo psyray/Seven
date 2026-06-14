@@ -913,6 +913,19 @@ class HtbApiConnector {
 		return this.htbApiGet(`team/activity/${teamId}`)
 	}
 
+	getRecentTeamActivity(teamId, sinceMs = null) {
+		return this.getTeamActivity(teamId).then(res => {
+			const items = Array.isArray(res)
+				? res
+				: (res?.data || res?.activity || res?.info?.activity || [])
+			if (!sinceMs) return items
+			return items.filter(item => {
+				const ts = Date.parse(item.date || item.created_at || item.updated_at)
+				return Number.isFinite(ts) && ts > sinceMs
+			})
+		})
+	}
+
 	getTeamOwnStats(teamId) {
 		return this.htbApiGet(`team/stats/owns/${teamId}`)
 	}

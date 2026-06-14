@@ -473,8 +473,22 @@ class HtbEmbeds {
 		
 	}
 
-	achievementInfo() {
-
+	achievementInfo(member, limit = 5) {
+		if (!member?.activity?.length) {
+			return this.MEMBER_INFO_BASE
+				.setAuthor("Recent activity", F.avatar2Url(member.avatar), F.memberProfileUrl(member))
+				.setDescription("No recent activity recorded in cache yet.")
+		}
+		const recent = [...member.activity]
+			.sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
+			.slice(0, limit)
+		const lines = recent.map(entry => {
+			const label = entry.flag_title ? `\`${entry.flag_title}\` on ` : ""
+			return `• ${label}${F.mdLink(entry.name, F.profileUrl({ id: entry.id, type: entry.object_type, name: entry.name }), true, F.timeSince(new Date(entry.date)))}`
+		})
+		return this.MEMBER_INFO_BASE
+			.setAuthor("Recent activity", F.avatar2Url(member.avatar), F.memberProfileUrl(member))
+			.setDescription(lines.join("\n"))
 	}
 
 	/* OWNAGE CHECKS */
@@ -921,17 +935,20 @@ class HtbEmbeds {
 
 	/** REALTIME PUSHER EVENT NOTIFICATIONS */
 
-	pusherOwn(member, target, type, sub, blood=false) {
-		target = this.ds.resolveEnt(target, type)
-		// console.log(member, target)
+	pusherOwn(member, target, type, sub, blood=false, memberLabel=null) {
+		const resolveType = type === "starting_point" ? "machine" : type
+		target = this.ds.resolveEnt(target, resolveType)
 		if (!member || !target){
 			return this.ENTITY_UNFOUND
 		}
-		var pb =  this.PUSHER_BASE
-			.setAuthor((blood? "🩸 " : "") + F.toTitleCase(target.type || "Unknown") + (["root", "user"].includes(sub) ? ` ${sub} ` : " ") + (blood? "blood taken" : "own") + (blood? "!" : ""), F.avatarFullUrl(member), "")
-			.setThumbnail(F.avatar2Url(target.avatar) || (member.team? F.avatar2Url(member.team.avatar) : F.avatar2Url(member.avatar)))
-			.setColor(H.any(...Object.values(F.COL)))
-			.setDescription(`${F.memberToMdLink(member,true,this.ds.tryDiscordifyUid(member.id))} ${blood ? "got" : "owned"} ${(["root", "user"].includes(sub)? sub + (blood?" blood":"") + " on" : "")} ${F.mdLink(target.name, F.profileUrl(target))}${(target.type == "challenge" ? " from the *"+target.category_name+"* category":"")}${(H.maybe(0.2) ? H.any(". Nice work! 🙂", ". **Why is all the RUM GONE!!!!**", ", woohoo!!", "!", ". Congrats! 🥳") : "")}` )
+		const displayName = memberLabel || this.ds.tryDiscordifyUid(member.id) || member.name
+		const authorBits = this._pusherOwnAuthor(type, sub, blood)
+		const description = this._pusherOwnDescription(displayName, target, type, sub, blood)
+		var pb = this.PUSHER_BASE
+			.setAuthor(authorBits.title, F.avatarFullUrl(member), "")
+			.setThumbnail(this._pusherOwnThumbnail(target, member, type))
+			.setColor(this._pusherOwnColor(type, blood))
+			.setDescription(description)
 			.setFooter(`ℹ️  Source: ${F.STL("Shoutbox", "bs")}`)
 		if (target.type == "challenge") {
 			pb.attachFiles(new Attachment(`./static/img/${F.challengeCategoryNameToIconFile(target.category_name)}`, "cat.png"))
@@ -940,7 +957,110 @@ class HtbEmbeds {
 		return pb
 	}
 
-	pusherNotif(event) {
+	_pusherOwnAuthor(type, sub, blood) {
+		if (blood) {
+			return { title: `🩸 ${F.toTitleCase(type || "Unknown")} first blood` }
+		}
+		if (type === "fortress" || type === "endgame" || type === "prolab") {
+			return { title: `${F.special2Proper(type)} flag captured` }
+		}
+		if (type === "starting_point") {
+			return { title: `Starting Point ${sub || "own"}` }
+		}
+		if (type === "challenge") {
+			return { title: "Challenge solved" }
+		}
+		return { title: `${F.toTitleCase(type || "Unknown")} ${["root", "user"].includes(sub) ? sub : ""} own`.trim() }
+	}
+
+	_pusherOwnDescription(displayName, target, type, sub, blood) {
+		const targetLink = F.mdLink(target.name, F.profileUrl(target))
+		if (["fortress", "endgame", "prolab"].includes(type) && sub && !["fortress", "endgame", "prolab"].includes(sub)) {
+			const progress = this._labProgressLine(target)
+			return `${displayName} captured flag \`${sub}\` on ${targetLink}.${progress}${H.maybe(0.2) ? H.any(" Nice work! 🙂", "!", ". Congrats! 🥳") : ""}`
+		}
+		if (type === "starting_point") {
+			return `${displayName} owned ${sub || "user"} on Starting Point box ${targetLink}.`
+		}
+		return `${displayName} ${blood ? "got" : "owned"} ${(["root", "user"].includes(sub)? sub + (blood?" blood":"") + " on" : "")} ${targetLink}${(target.type == "challenge" ? " from the *"+target.category_name+"* category":"")}${(H.maybe(0.2) ? H.any(". Nice work! 🙂", ". **Why is all the RUM GONE!!!!**", ", woohoo!!", "!", ". Congrats! 🥳") : "")}`
+	}
+
+	_labProgressLine(target) {
+		const flags = target.flags ? Object.keys(target.flags) : []
+		if (!flags.length) return ""
+		const owns = this.ds.getTeamOwnsForTarget(target) || []
+		const captured = new Set(owns.map(o => String(o.flag_title || "").toLowerCase()).filter(Boolean))
+		return `\nProgress: **${captured.size}/${flags.length}** flags captured by the team.`
+	}
+
+	_pusherOwnThumbnail(target, member, type) {
+		if (target.avatar || target.thumb) {
+			return F.avatar2Url(target.avatar) || target.thumb
+		}
+		if (["fortress", "endgame", "prolab"].includes(type)) {
+			return F.avatar2Url(target.avatar) || (member.team ? F.avatar2Url(member.team.avatar) : F.avatarFullUrl(member))
+		}
+		return member.team ? F.avatar2Url(member.team.avatar) : F.avatarFullUrl(member)
+	}
+
+	_pusherOwnColor(type, blood) {
+		if (blood) return F.COL.MALWARE_RED
+		if (type === "launch") return F.COL.HTB_GREEN
+		if (type === "challenge") return F.COL.AZURE
+		if (["fortress", "endgame", "prolab"].includes(type)) return F.COL.NUGGET_YELLOW
+		return H.any(...Object.values(F.COL))
+	}
+
+	pusherTeamNotification(event, memberLabel=null) {
+		const displayName = memberLabel || (event.uid ? this.ds.tryDiscordifyUid(event.uid) : "Someone")
+		const embed = this.PUSHER_BASE
+			.setColor(F.COL.AQUAMARINE)
+			.setFooter(`ℹ️  Source: ${F.STL("HTB Notifications", "bs")}`)
+		switch (event.type) {
+		case "badge":
+			return embed
+				.setAuthor("Badge earned 🏅", this.ds.TEAM_STATS?.avatar_url || undefined)
+				.setDescription(`${displayName || "A team member"} earned the badge **${event.target || "Unknown"}**.`)
+		case "respect":
+			return embed
+				.setAuthor("Respect received ⭐", this.ds.TEAM_STATS?.avatar_url || undefined)
+				.setDescription(`${displayName || "A team member"} received respect on HTB.`)
+		case "rank_up":
+			return embed
+				.setAuthor("Rank milestone 📈", this.ds.TEAM_STATS?.avatar_url || undefined)
+				.setDescription(`${displayName || "A team member"} reached a new rank milestone on HTB.`)
+		case "join":
+			return embed
+				.setAuthor("Team member joined HTB 👋", this.ds.TEAM_STATS?.avatar_url || undefined)
+				.setDescription(`${displayName || "A team member"} joined Hack The Box.`)
+		default:
+			return embed
+				.setAuthor("HTB notification", this.ds.TEAM_STATS?.avatar_url || undefined)
+				.setDescription(event.markdown || "New HTB notification.")
+		}
+	}
+
+	pusherStatus(status) {
+		const lines = [
+			`**Pusher state:** \`${status.pusherState}\` (${status.pusherHealthy ? "healthy" : "degraded"})`,
+			`**Queued announces:** ${status.queueSize}`,
+			`**Fallback poll:** ${status.lastFallbackPollAt || "never"}${status.lastFallbackError ? ` (last error: ${status.lastFallbackError})` : ""}`,
+			"",
+			"**Recent events:**",
+		]
+		if (!status.lastEvents?.length) {
+			lines.push("_No Pusher events recorded yet._")
+		} else {
+			status.lastEvents.forEach(evt => {
+				lines.push(`• \`${evt.at}\` ${evt.type || "?"} ${evt.target || ""}${evt.blood ? " 🩸" : ""}`)
+			})
+		}
+		return this.PUSHER_BASE
+			.setAuthor("Pusher status", this.ds.TEAM_STATS?.avatar_url || undefined)
+			.setDescription(lines.join("\n"))
+	}
+
+	pusherNotif(event, memberLabel=null) {
 		var {markdown:md, target} = event
 		target = target ? this.ds.getMachineByName(target) : null
 		var embed = this.PUSHER_BASE

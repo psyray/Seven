@@ -80,6 +80,38 @@ seven set htb tokens eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... def50200...
 
 Hot-reloads both tokens in memory without restart. Also persists to `HTB_TOKEN_FILE` when configured.
 
+### Pusher status (admin)
+
+```
+seven pusher status
+```
+
+Shows Pusher connection state, pending announce queue size, recent events, and API fallback poll status.
+
+## Real-time notifications (Pusher)
+
+Seven announces team owns (and global first blood) on `DISCORD_ANNOUNCE_CHAN_ID` via HTB Pusher. See [developer/pusher-events.md](../developer/pusher-events.md) for HTML formats.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PUSHER_MENTION_ON_OWN` | `true` | Discord @mention on owns when HTB account is linked |
+| `PUSHER_ANNOUNCE_USER_FLAGS` | `true` | Announce machine user flags |
+| `PUSHER_ANNOUNCE_ROOT_FLAGS` | `true` | Announce machine root flags |
+| `PUSHER_ANNOUNCE_CHALLENGES` | `true` | Announce challenge solves |
+| `PUSHER_ANNOUNCE_LABS` | `true` | Endgame / Fortress / Pro Lab flags |
+| `PUSHER_ANNOUNCE_LAUNCHES` | `true` | New machine launches |
+| `PUSHER_ANNOUNCE_BADGES` | `true` | Badge notifications for team members |
+| `PUSHER_ANNOUNCE_RESPECTS` | `false` | Respect notifications |
+| `PUSHER_ANNOUNCE_JOINS` | `false` | HTB account join notifications |
+| `PUSHER_DB_PERSIST_DEBOUNCE_MS` | `30000` | Delay before writing Pusher cache updates to Postgres |
+| `PUSHER_FALLBACK_POLL_MS` | `300000` | Poll `team/activity` when Pusher is unhealthy |
+
+**Troubleshooting:**
+
+- No live announces but bot online → run `seven pusher status`; check `HTB_V4_TOKEN` (Pusher auth uses the same Bearer token)
+- Missed events after outage → fallback poll catches up; force `seven force update` for full member activity refresh
+- Collect raw payloads in staging → set `IS_DEV_INSTANCE=true` and inspect `cache/PUSHER_MSG_LOG.json`
+
 ## Sync behaviour (automatic)
 
 | Trigger | Mode | Description |

@@ -17,7 +17,7 @@ description: >-
 | Live tail | `npm run docker:logs` |
 | Console | stdout in docker logs (winston mirrors to console) |
 
-Logger modules: `[bot]`, `[datastore]`, `[htb-api]`, `[pusher-htb]`
+Logger modules: `[bot]`, `[datastore]`, `[htb-api]`, `[pusher-htb]`, `[notification-router]`
 
 ## Diagnostic flow
 
@@ -53,6 +53,20 @@ Logger modules: `[bot]`, `[datastore]`, `[htb-api]`, `[pusher-htb]`
 | DialogFlow entity error | Malformed flag data | Fix `extractSpecialTargetFlagNames()` |
 | `password authentication failed` | Postgres volume password | See seven-docker-ops skill |
 | 0 machines after clear cache | Token or API base wrong | Verify `HTB_API_BASE` and token |
+| No live own announces | Pusher down or bad token | `seven pusher status`; check `HTB_V4_TOKEN` (Pusher auth) |
+| Owns missed at boot | Channel not ready yet | Should queue — verify `DISCORD_ANNOUNCE_CHAN_ID`; restart if queue stuck |
+| No @mention on own | Account not linked | Link HTB↔Discord; check `PUSHER_MENTION_ON_OWN` |
+| Lab own not parsed | HTML format change | `IS_DEV_INSTANCE=true` → inspect `cache/PUSHER_MSG_LOG.json`; update parser |
+
+## Pusher diagnostics
+
+1. Admin: `seven pusher status` — connection state, queue size, recent events
+2. Logs: `[pusher-htb]` state changes, `[notification-router]` fallback polls
+3. Staging capture: `IS_DEV_INSTANCE=true` → `cache/PUSHER_MSG_LOG.json`
+4. Parser regression: `npm run test:pusher`
+5. Fallback: when Pusher unhealthy, polls `team/activity` every `PUSHER_FALLBACK_POLL_MS`
+
+See `docs/developer/pusher-events.md` for expected HTML formats.
 
 ## Useful debug env vars
 
@@ -75,6 +89,7 @@ Linked DC  : N
 Admin commands:
 - `seven force update` → smart team sync
 - `seven clear the cache` (admin) → full re-fetch
+- `seven pusher status` (admin) → Pusher connection + announce queue
 
 ## DialogFlow entity sync errors
 

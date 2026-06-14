@@ -27,6 +27,25 @@ For local non-Docker dev, use `DATABASE_URL` or individual `PGHOST`/`PGUSER`/`PG
 
 Example: `ADMIN_DISCORD_IDS=["123456789012345678"]`
 
+## Pusher notifications
+
+Optional tuning for real-time own announcements. Defaults enable all own types except respects/joins/shoutbox.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PUSHER_MENTION_ON_OWN` | `true` | Discord @mention when HTB account is linked |
+| `PUSHER_ANNOUNCE_USER_FLAGS` | `true` | Machine user-flag owns |
+| `PUSHER_ANNOUNCE_ROOT_FLAGS` | `true` | Machine root owns |
+| `PUSHER_ANNOUNCE_CHALLENGES` | `true` | Challenge solves |
+| `PUSHER_ANNOUNCE_LABS` | `true` | Endgame / Fortress / Pro Lab flags |
+| `PUSHER_ANNOUNCE_LAUNCHES` | `true` | Machine launch announcements |
+| `PUSHER_ANNOUNCE_BADGES` | `true` | Badge notifications (team members) |
+| `PUSHER_ANNOUNCE_RESPECTS` | `false` | Respect notifications |
+| `PUSHER_ANNOUNCE_JOINS` | `false` | HTB registration join notifications |
+| `PUSHER_ANNOUNCE_SHOUTBOX` | `false` | Global shoutbox relay |
+| `PUSHER_DB_PERSIST_DEBOUNCE_MS` | `30000` | Debounce before Postgres persist after owns |
+| `PUSHER_FALLBACK_POLL_MS` | `300000` | `team/activity` poll interval when Pusher is down |
+
 ## Hack The Box (v4 API — OAuth)
 
 | Variable | Required | Default | Description |

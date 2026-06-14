@@ -1,6 +1,6 @@
 ---
 description: Charts rendering, Pusher notifications, and optional API server
-globs: "{modules/charts/**,helpers/pusher-htb.js,modules/seven-api-server.js,modules/seven-api-connector.js}"
+globs: "{modules/charts/**,helpers/pusher-htb.js,helpers/notification-router.js,helpers/pusher-config.js,bot.js,views/embeds.js,modules/seven-api-server.js,modules/seven-api-connector.js}"
 alwaysApply: false
 ---
 
@@ -13,11 +13,22 @@ alwaysApply: false
 - Member charts triggered by `getMemberChart` intent in bot.js
 - License: `ACCEPT_HIGHCHARTS_LICENSE=YES` in Dockerfile
 
-## Pusher (`helpers/pusher-htb.js`)
+## Pusher notifications
 
-- Real-time HTB achievement notifications to `DISCORD_ANNOUNCE_CHAN_ID`
-- Initialized after Discord client ready; logs via `createLogger("pusher-htb")`
-- `DEV_MODE_ON` uses local `cache/PUSHER_MSG_LOG.json` instead of live events
+Flow: `helpers/pusher-htb.js` (parse HTML) → `helpers/notification-router.js` (route/filter/queue) → `DISCORD_ANNOUNCE_CHAN_ID`
+
+| Module | Role |
+|--------|------|
+| `helpers/pusher-htb.js` | Pusher client, `parsePusherEvent()`, logs via `createLogger("pusher-htb")` |
+| `helpers/notification-router.js` | Announce queue, `@mentions`, cache debounce, fallback poll, admin status |
+| `helpers/pusher-config.js` | `PUSHER_*` env toggles |
+
+- Pusher subscribes at startup (before Discord `ready`); pending announces queue until channel is fetched
+- Own filter: team member **or** first blood **or** linked Discord account
+- Fallback: `getRecentTeamActivity()` when Pusher unhealthy (`PUSHER_FALLBACK_POLL_MS`)
+- Admin: `admin.pusherStatus` / `seven pusher status`
+- Dev: `IS_DEV_INSTANCE=true` appends to `cache/PUSHER_MSG_LOG.json`; replay via `npm run test:pusher`
+- Event formats: `docs/developer/pusher-events.md`
 
 ## Optional API server
 
