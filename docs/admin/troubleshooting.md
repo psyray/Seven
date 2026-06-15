@@ -74,7 +74,7 @@ Tune concurrency if rate-limited: lower `HTB_MACHINE_PROFILE_CONCURRENCY` (defau
 
 ### Partial cache after restart
 
-Expected behaviour — Seven only fetches **missing** sections on startup. Use `seven force update` or `seven clear cache` if data seems stale.
+Expected behaviour — Seven only fetches **missing** sections on startup (empty `{}` in DB counts as missing). Hourly sync runs **delta** mode (missing/stale catalog entries + new team members). Use `seven sync <section>` for a targeted refresh, `seven force update` for full team refresh, or `seven clear cache` to rebuild from scratch.
 
 ## Discord issues
 

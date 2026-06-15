@@ -50,7 +50,7 @@ npm run docker:logs
 Configure in `.env`:
 
 - **`ADMIN_DISCORD_IDS`** — full admin access (clear cache, emoji, parrot mode, status)
-- **`CAPTAIN_DISCORD_IDS`** — maintenance access (force update)
+- **`CAPTAIN_DISCORD_IDS`** — maintenance access (force update, section sync, pusher history)
 
 Both are JSON arrays of Discord user IDs, e.g. `["123456789012345678"]`.
 
@@ -60,7 +60,7 @@ Both are JSON arrays of Discord user IDs, e.g. `["123456789012345678"]`.
 - [ ] Startup logs show `[DISCORD]::: CLIENT READY`
 - [ ] HTB sync completes (or skips with warm cache)
 - [ ] Run `seven setup emoji` (admin) for HTB icons in embeds
-- [ ] Run `seven force update` (captain) after roster changes
+- [ ] Run `seven force update` (captain) after roster changes, or `seven sync <section>` for targeted refresh
 - [ ] Link your own HTB account: `seven I am <uid> on HTB`
 - [ ] Verify announce channel receives test notification (optional)
 

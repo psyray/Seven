@@ -119,7 +119,8 @@ function sectionTargets() {
 - ║   "_challengename_" / "_challengename_ info"
 # ║ Special content
 - ║   Fortress, Endgame, Pro Lab names work the same way.
-- ║   Ask for info on any cached special target by name.
+- ║   Seven fetches missing targets from HTB on demand if not in cache.
+- ║   Pro Labs include full scenarios and newer mini labs (see Lists).
 # ║ Newest content
 - ║   "What's new?" / "What's fresh?" — latest machine
 - ║   "First box" — classic Lame easter egg
@@ -195,6 +196,11 @@ function sectionFilters() {
 - ║   "linux boxes" / "windows boxes"
 - ║   "incomplete challenges for _username_"
 - ║   "boxes _username_ hasn't finished"
+# ║ Catalog lists (fortresses, endgames, pro labs)
+- ║   "list fortresses" / "list endgames" — first 15, sorted by id
+- ║   "list prolabs" / "list pro labs" — **all** pro labs, sorted by id
+- ║   Each pro lab shows **standard** (full scenario) or **mini** (short lab)
+- ║   "list all machines" — no result cap (same pattern as other types)
 # ║ Filter members
 - ║   "who has the most roots?" / member rankings
 # ║ Sort hints
@@ -234,8 +240,13 @@ function sectionCaptain() {
 ══╗
 # ║ Data refresh (captain or admin)
 - ║   "force update" / "refresh team data"
-- ║   Smart sync: team members + missing deps only.
+- ║   Delta sync: catalog updates (incl. stale) + full team refresh.
 - ║   Use after roster changes or stale rankings.
+# ║ Section sync (captain or admin)
+- ║   "sync machines" / "sync challenges"
+- ║   "sync fortresses" / "sync endgames" / "sync prolabs"
+- ║   "sync specials" (all three) / "sync all"
+- ║   Fetches only missing or stale entries for that section.
 # ║ HTB OAuth (when sync fails)
 - ║   Seven uses OAuth access + refresh tokens (~72h cycle).
 - ║   Access renews automatically; no manual App Token.
@@ -247,7 +258,8 @@ function sectionCaptain() {
 - ║   "pusher history" — last stored HTB events (all members)
 - ║   "pusher history <member>" — filter by HTB username
 - ║   "pusher repost last" / "pusher repost <id>" — force post to announce channel
-- ║   Use when Pusher/fallback missed an announce; does not re-sync HTB stats.
+- ║   Missing targets are auto-fetched from HTB before repost.
+- ║   Repost does not re-integrate HTB team stats.
 ══╝`
 }
 
@@ -261,7 +273,8 @@ function sectionAdmin() {
 - ║   No restart if you use this or HTB_TOKEN_FILE (JSON).
 - ║   Pair from labs.hackthebox.com login/refresh response.
 # ║ Cache & sync
-- ║   "clear cache" — wipe memory + full HTB refresh
+- ║   "clear cache" — wipe memory + delta bootstrap from HTB
+- ║   "pusher status" — Pusher connection + recent events
 # ║ Bot presence
 - ║   "set status …" — Discord status/activity
 # ║ Custom emoji (HTB icons in embeds)
@@ -282,6 +295,7 @@ function sectionTips(role) {
 - Names are case-insensitive; typos often still work.
 - Link your HTB account to use "me" / get Discord pings.
 - Achievements in the announce channel need a linked account.
+- Unknown box/challenge names trigger a quick HTB fetch before replying.
 - Re-ask with simpler wording if DialogFlow mishears you.${extra}`
 }
 

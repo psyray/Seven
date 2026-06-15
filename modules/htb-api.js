@@ -929,12 +929,38 @@ class HtbApiConnector {
 		return this.htbApiGet(`fortress/${id}`).then(e => Object.assign(e.data, { type: "fortress" }))
 	}
 
+	async getCompleteFortressById(id, entry = null) {
+		let base = entry
+		if (!base) {
+			const entries = await this.getAllFortressEntries()
+			base = entries.find(item => String(item.id) === String(id))
+		}
+		if (!base) return null
+		const profile = await this.getFortressProfile(id)
+		return H.combine([base, profile])
+	}
+
+	async getCompleteFortressesByIds(ids, entryList = null) {
+		const entries = entryList || await this.getAllFortressEntries()
+		const byId = H.arrToObj(entries, "id")
+		const targets = ids.map(id => byId[id]).filter(Boolean)
+		if (!targets.length) return {}
+		log.info("Fetching fortress profiles", { count: targets.length })
+		let done = 0
+		const profiles = {}
+		await mapWithConcurrency(targets, async (entry) => {
+			profiles[entry.id] = await this.getCompleteFortressById(entry.id, entry)
+			done++
+			logBatchProgress("Fortress profiles", done, targets.length)
+		}, MACHINE_PROFILE_CONCURRENCY)
+		log.info("Fortress profiles ready", { count: Object.keys(profiles).length })
+		return profiles
+	}
+
 	async getAllFortresses() {
-		let entries = await this.getAllFortressEntries()
-		log.info("Fetching fortress profiles", { count: entries.length })
-		let profiles = await Promise.all(entries.map(entry => this.getFortressProfile(entry.id)))
-		log.info("Fortress profiles ready", { count: profiles.length })
-		return H.arrToObj(entries.map((e, i) => H.combine([e, profiles[i]])), "id")
+		const entries = await this.getAllFortressEntries()
+		if (!entries.length) return {}
+		return this.getCompleteFortressesByIds(entries.map(entry => entry.id), entries)
 	}
 
 	async getAllEndgameEntries() {
@@ -949,19 +975,42 @@ class HtbApiConnector {
 		return this.htbApiGet(`endgame/${id}/flags`).then(e => e.data)
 	}
 
+	async getCompleteEndgameById(id, entry = null) {
+		let base = entry
+		if (!base) {
+			const entries = await this.getAllEndgameEntries()
+			base = entries.find(item => String(item.id) === String(id))
+		}
+		if (!base) return null
+		const profile = await this.getEndgameProfile(id)
+		const flags = await this.getEndgameFlags(id).then(data => ({ flags: data }))
+		return H.combine([base, flags, profile])
+	}
+
+	async getCompleteEndgamesByIds(ids, entryList = null) {
+		const entries = entryList || await this.getAllEndgameEntries()
+		const byId = H.arrToObj(entries, "id")
+		const targets = ids.map(id => byId[id]).filter(Boolean)
+		if (!targets.length) return {}
+		log.info("Fetching endgame profiles and flags", { count: targets.length })
+		let done = 0
+		const profiles = {}
+		await mapWithConcurrency(targets, async (entry) => {
+			profiles[entry.id] = await this.getCompleteEndgameById(entry.id, entry)
+			done++
+			logBatchProgress("Endgame profiles", done, targets.length)
+		}, MACHINE_PROFILE_CONCURRENCY)
+		log.info("Endgame data ready", { count: Object.keys(profiles).length })
+		return profiles
+	}
+
 	async getAllEndgames() {
-		let entries = await this.getAllEndgameEntries()
+		const entries = await this.getAllEndgameEntries()
 		if (!entries.length) {
 			log.info("No endgame entries to fetch")
 			return {}
 		}
-		log.info("Fetching endgame profiles and flags", { count: entries.length })
-		let profiles = await Promise.all(entries.map(entry => this.getEndgameProfile(entry.id)))
-		let flags = await Promise.all(entries.map(entry => this.getEndgameFlags(entry.id)
-			.then(flags => ({ flags: flags }))
-		))
-		log.info("Endgame data ready", { count: entries.length })
-		return H.arrToObj(entries.map((e, i) => H.combine([e, flags[i], profiles[i]])), "id")
+		return this.getCompleteEndgamesByIds(entries.map(entry => entry.id), entries)
 	}
 
 	async getAllProLabEntries() {
@@ -990,20 +1039,83 @@ class HtbApiConnector {
 		return this.htbApiGet(`prolab/${id}/overview`).then(e => Object.assign(e.data, { type: "prolab" }))
 	}
 
+	async getCompleteProlabById(id, entry = null) {
+		let base = entry
+		if (!base) {
+			const entries = await this.getAllProLabEntries()
+			base = entries.find(item => String(item.id) === String(id))
+		}
+		if (!base) return null
+		const flags = await this.getProLabFlags(id).then(data => ({ flags: data }))
+		const info = await this.getProLabInfo(id)
+		const overview = await this.getProLabOverview(id)
+		return H.combine([base, flags, info, overview])
+	}
+
+	async getCompleteProlabsByIds(ids, entryList = null) {
+		const entries = entryList || await this.getAllProLabEntries()
+		const byId = H.arrToObj(entries, "id")
+		const targets = ids.map(id => byId[id]).filter(Boolean)
+		if (!targets.length) return {}
+		log.info("Fetching pro lab data", { count: targets.length })
+		let done = 0
+		const profiles = {}
+		await mapWithConcurrency(targets, async (entry) => {
+			profiles[entry.id] = await this.getCompleteProlabById(entry.id, entry)
+			done++
+			logBatchProgress("Pro lab profiles", done, targets.length)
+		}, MACHINE_PROFILE_CONCURRENCY)
+		log.info("Pro lab data ready", { count: Object.keys(profiles).length })
+		return profiles
+	}
+
 	async getAllProlabs() {
-		let entries = await this.getAllProLabEntries()
+		const entries = await this.getAllProLabEntries()
 		if (!entries.length) {
 			log.info("No pro lab entries to fetch")
 			return {}
 		}
-		log.info("Fetching pro lab data", { count: entries.length })
-		let flags = await Promise.all(entries.map(entry => this.getProLabFlags(entry.id)
-			.then(flags => ({ flags: flags }))
-		))
-		let infos = await Promise.all(entries.map(entry => this.getProLabInfo(entry.id)))
-		let overviews = await Promise.all(entries.map(entry => this.getProLabOverview(entry.id)))
-		log.info("Pro lab data ready", { count: entries.length })
-		return H.arrToObj(entries.map((e, i) => H.combine([e, flags[i], infos[i], overviews[i]])), "id")
+		return this.getCompleteProlabsByIds(entries.map(entry => entry.id), entries)
+	}
+
+	async buildMachineFromProfileIdentifier(identifier) {
+		try {
+			const res = await this.getMachineProfile(identifier)
+			const info = res?.info
+			if (!info?.id) {
+				log.debug("Machine profile not found", { identifier })
+				return null
+			}
+			return H.combine([
+				{
+					type: "machine",
+					id: info.id,
+					name: info.name,
+					os: info.os,
+					active: info.active,
+					retired: info.retired,
+					retiredate: info.retire_date || info.retiredate || null,
+					release: info.release,
+					points: info.points,
+					static_points: info.static_points,
+					difficulty: info.difficulty,
+					difficultyText: info.difficultyText,
+					avatar: normalizeAvatarPath(info.avatar),
+					user_owns_count: info.user_owns_count,
+					root_owns_count: info.root_owns_count,
+					free: info.free,
+					star: info.rating,
+					stars: info.rating,
+				},
+				extractMachineProfileEnrichment(res),
+			])
+		} catch (error) {
+			if (error.status === 404) {
+				log.debug("Machine profile not found", { identifier })
+				return null
+			}
+			throw error
+		}
 	}
 
 	getTeamProfile(teamId) {

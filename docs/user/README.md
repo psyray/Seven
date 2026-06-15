@@ -28,7 +28,7 @@ Captains and admins see extra sections for maintenance commands.
 - **Ownership** — who rooted/solved what, member activity timelines
 - **Members** — profiles, ranks, achievement charts
 - **Team** — info, global rank, leaderboard, flagboard, badge
-- **Filters** — hardest/easiest boxes, OS filters, incomplete lists per member
+- **Filters** — hardest/easiest boxes, OS filters, incomplete lists per member, catalog lists (`list prolabs`, …)
 - **Privacy** — link Discord to HTB, opt out of tracking
 - **Fun** — binary clock, small talk, easter eggs
 

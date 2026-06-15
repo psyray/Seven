@@ -64,20 +64,25 @@ This reduces v4 calls while keeping owned/retired machine data accurate.
 
 ## Sync orchestration
 
-`models/SevenDatastore.js` → `DAT.update(options)`:
+`models/SevenDatastore.js` → `HtbSyncEngine.runPlan()` via `DAT.update(options)`:
 
 | Option | Behavior |
 |--------|----------|
-| Default | Only sections missing from cache/DB |
-| `{ force: true }` | Team members + missing deps (machines/challenges/specials) |
-| `{ full: true }` | All 5 sections |
-| `{ sections: ["team"] }` | Explicit list, expanded via `getMemberSyncDependencies()` |
+| Default | Only sections missing from cache/DB (empty `{}` counts as missing) |
+| `{ delta: true }` | Hourly: catalog deltas + stale metadata refresh + new team members only |
+| `{ force: true }` | Catalog deltas + stale + **full** team member refresh |
+| `{ full: true, bootstrap: true }` | Admin clear cache — delta bootstrap from empty memory |
+| `{ sections: ["machines"] }` | Explicit section delta; `specials` expands to fortresses/endgames/prolabs |
 
-Section order: `machines → specials → tags → team → challenges`
+Section order: `machines → fortresses → endgames → prolabs → tags → team → challenges`
+
+**Delta pattern** (per catalog kind): API list (1–2 calls) → diff IDs vs cache → fetch detail only for missing/stale IDs.
+
+**On-demand**: `ensureTarget()` / `ensureCachedTarget()` — single target via profile/search/catalog (Pusher, `resolveEntWithEnsure`).
 
 Helper methods:
 
-- `hasCachedObject()`, `getMissingSections()`, `describeUpdatePlan()` — logging
+- `hasCachedObject()`, `getMissingSections()`, `describeUpdatePlan()` — section planning
 - `hydrateFromDbBackup()` — restore from Postgres on startup
 - `syncDbExportFields()` — export top-level fortress/endgame/prolab fields for DB compat
 
@@ -100,7 +105,7 @@ Helper methods:
 | `HTB_MACHINE_PROFILE_CONCURRENCY` | No | 3 | Parallel profile fetches |
 | `HTB_API_LOG_REQUESTS` | No | false | Verbose API logs |
 | `HTB_RATE_LIMIT_WAIT_THRESHOLD_MS` | No | 3000 | Rate-limit log threshold |
-| `HTB_RATE_LIMIT_LOG_EVERY_MS` | No | 15000 | Rate-limit heartbeat |
+| `HTB_TEAM_STATS_REFRESH_MS` | No | 3600000 | Team stats re-fetch interval in delta mode |
 
 ## Cache shape
 
@@ -111,7 +116,7 @@ DAT.TEAM_MEMBERS      // { [id]: TeamMember }
 DAT.TEAM_STATS        // Team object
 DAT.MISC.FORTRESSES   // { [id]: Fortress }
 DAT.MISC.ENDGAMES     // { [id]: Endgame }
-DAT.MISC.PROLABS      // { [id]: ProLab }
+DAT.MISC.PROLABS      // { [id]: ProLab } — full scenarios + mini labs (`mini: true`); list via filterEnt id asc
 DAT.MISC.MACHINE_TAGS // tag categories
 DAT.DISCORD_LINKS     // Discord ↔ HTB (via D_STATIC)
 ```
@@ -138,6 +143,13 @@ When Pusher is unhealthy, `NotificationRouter` polls member activity via:
 Note: `GET team/activity/{teamId}` often returns **401** with OAuth v4 tokens — do not use it for fallback.
 
 Used for catch-up after sustained Pusher disconnect (≥15s) and periodic fallback (`PUSHER_FALLBACK_POLL_MS`, **always active**). Live owns still come primarily from Pusher (`helpers/pusher-htb.js`).
+
+### Pro lab catalog notes
+
+- List endpoint: `GET prolabs` → `data.labs` (`getAllProLabEntries()` in `htb-api.js`)
+- Cache may mix **standard** pro labs (`mini: false`, e.g. RastaLabs) and **mini** labs (`mini: true`, e.g. Trusted)
+- `filterEnt("prolab")` defaults to **id ascending** when `sortorder` is empty (fortress/endgame too)
+- `list prolabs` (local NLP) applies `nolimit` — never cap at 15; embed shows `standard` / `mini` per row (`filteredTargetString` in `embeds.js`)
 
 Fallback deduplication uses in-memory `announcedOwnKeys` in `NotificationRouter` (separate from HTB cache — survives `force update` without blocking re-announce of new owns).
 

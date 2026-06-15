@@ -71,16 +71,19 @@ DAT.LAST_UPDATE        // Per-section timestamps
 
 ## Sync modes
 
-See [htb-api.md](htb-api.md) for API details. Summary:
+See [htb-api.md](htb-api.md) for API details. All sync logic is in `helpers/htb-sync-engine.js` (`HtbSyncEngine`).
 
 | Option | When |
 |--------|------|
-| Default | Startup — missing sections only |
-| `{ force: true }` | Hourly, `force update` — team + deps |
-| `{ full: true }` | `clear cache` — all 5 sections |
-| `{ sections: [...] }` | Explicit section list |
+| Default | Startup — missing sections only (empty `{}` = missing) |
+| `{ delta: true }` | Hourly — catalog deltas + stale + new team members |
+| `{ force: true }` | `force update` — catalog deltas + stale + full team refresh |
+| `{ full: true, bootstrap: true }` | `clear cache` — delta bootstrap from empty memory |
+| `{ sections: [...] }` | `seven sync <section>` — one section delta |
 
-Order: `machines → specials → tags → team → challenges`
+Order: `machines → fortresses → endgames → prolabs → tags → team → challenges`
+
+On-demand: `ensureCachedTarget()` (Pusher, Discord name lookup) fetches a single target without full-section sync.
 
 ## Postgres backup
 

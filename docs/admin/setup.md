@@ -99,6 +99,7 @@ As captain or admin:
 
 ```
 seven force update
+seven sync all
 ```
 
 Link your account:

@@ -66,6 +66,8 @@ easiest challenges
 newest boxes
 linux boxes
 windows boxes
+list prolabs
+list fortresses
 incomplete challenges for alice
 who has the most roots?
 ```

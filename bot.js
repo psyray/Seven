@@ -353,16 +353,23 @@ async function updateDiscordIds(client, guildIdString) {
 
 async function refresh(options = {}) {
 	try {
-		const updated = await DAT.update(options)
+		const result = await DAT.update(options)
 		syncPusherAuth()
 		if (htbAuthFailureNotified) clearHtbAuthFailureAlert()
-		return updated
+		return result
 	} catch (error) {
 		if (error instanceof HtbTokenExpiredError || error instanceof HtbAuthError) {
 			await notifyCaptainsOfHtbAuthFailure(error)
 		}
 		throw error
 	}
+}
+
+async function persistSyncResult(result) {
+	if (!result?.updated) return false
+	DAT.syncDbExportFields()
+	const fields = result.dbFields?.length ? result.dbFields : DB_FIELDNAMES_AUTO
+	return updateCache(fields)
 }
 
 function syncPusherAuth() {
@@ -589,13 +596,10 @@ async function main() {
 				})
 			}
 			const refreshStarted = Date.now()
-			const updated = await refresh({ force: false })
-			if (updated) {
-				DAT.syncDbExportFields()
-				await updateCache()
-			}
+			const bootResult = await refresh({})
+			await persistSyncResult(bootResult)
 			log.info("Initial data refresh completed", {
-				updated,
+				updated: bootResult?.updated,
 				machines: Object.keys(DAT.MACHINES).length,
 				challenges: Object.keys(DAT.CHALLENGES).length,
 				members: Object.keys(DAT.TEAM_MEMBERS).length,
@@ -607,13 +611,10 @@ async function main() {
 		}
 		setInterval(async () => {
 			try {
-				const updated = await refresh({ force: true })
-				log.info("Scheduled data refresh completed", { updated })
-				if (updated) {
-					DAT.syncDbExportFields()
-					var cacheUpdated = await updateCache()
-					if (cacheUpdated) { log.info("DB backup updated after scheduled refresh") }
-				}
+				const result = await refresh({ delta: true })
+				log.info("Scheduled data refresh completed", { updated: result?.updated })
+				const cacheUpdated = await persistSyncResult(result)
+				if (cacheUpdated) { log.info("DB backup updated after scheduled refresh") }
 			} catch (error) {
 				log.error("Scheduled data refresh failed", { message: error.message })
 			}
@@ -904,7 +905,15 @@ async function forgetHtbDataFlow(message, identifier, uid) {
 }
 
 async function doFakeReboot(message, note) {
-	await SEND.human(message, note, true)
+	const text = note && String(note).trim()
+		? note
+		: H.any(
+			"Rebooting… brb 🔄",
+			"Kernel panic? Nah, just a nap. 😴",
+			"Restarting personality module…",
+			"Ctrl+Alt+Del engaged. Be right back!",
+		)
+	await SEND.human(message, text, true)
 	await client.user.setStatus("idle")
 		.then(console.log)
 		.catch(console.error)
@@ -940,20 +949,58 @@ async function forceUpdate(message) {
 			"ok, on it! 🍉") + `\n(${plan})`, false)
 		log.info("Force update requested", { plan })
 		try {
-			await refresh({ force: true })
+			const result = await refresh({ force: true })
 			console.log("Data refresh completed!")
-			DAT.syncDbExportFields()
-			await updateCache().then(SEND.human(message, H.any("hey I finished updating the DB! 😊",
+			await persistSyncResult(result)
+			await SEND.human(message, H.any("hey I finished updating the DB! 😊",
 				"Heyo, the DB update is finished!",
 				"The data has been updated!",
 				"DB update complete!",
-				"Achivement data has been updated. 😊"), false))
+				"Achivement data has been updated. 😊"), false)
 		} catch (error) {
 			log.error("Force update failed", { message: error.message, stack: error.stack })
 			await SEND.human(message, formatHtbAuthError(error), false)
 		}
 	} else {
 		SEND.human(message, `You're not my boss! 🤔\nno can do.\nTry asking <@!${JSON.parse(process.env.ADMIN_DISCORD_IDS)[0]}>!`)
+	}
+}
+
+const SYNC_SECTION_ALIASES = {
+	machine: "machines",
+	machines: "machines",
+	challenge: "challenges",
+	challenges: "challenges",
+	fortress: "fortresses",
+	fortresses: "fortresses",
+	endgame: "endgames",
+	endgames: "endgames",
+	prolab: "prolabs",
+	prolabs: "prolabs",
+	"pro lab": "prolabs",
+	"pro labs": "prolabs",
+	special: "specials",
+	specials: "specials",
+	all: "all",
+}
+
+async function admin_syncSection(message, sectionName) {
+	if (!isCaptain(message.author) && !isAdmin(message.author)) {
+		SEND.human(message, `You're not my boss! 🤔\nno can do.\nTry asking <@!${JSON.parse(process.env.ADMIN_DISCORD_IDS)[0]}>!`)
+		return
+	}
+	const normalized = SYNC_SECTION_ALIASES[sectionName?.toLowerCase?.()] || sectionName
+	const sections = normalized === "all"
+		? ["machines", "fortresses", "endgames", "prolabs", "tags", "team", "challenges"]
+		: [normalized]
+	SEND.human(message, `Delta sync started for: ${sections.join(", ")}`, false)
+	try {
+		const result = await refresh({ sections })
+		await persistSyncResult(result)
+		await SEND.human(message, H.any("Sync finished! 😊", "Delta sync complete!", "Done updating cache."), false)
+	} catch (error) {
+		log.error("Section sync failed", { section: normalized, message: error.message })
+		await SEND.human(message, formatHtbAuthError(error), false)
 	}
 }
 
@@ -985,9 +1032,8 @@ async function admin_clearCached(message) {
 		DAT.ENDGAMES = {}
 		DAT.PROLABS = {}
 		try {
-			await refresh({ full: true })
-			DAT.syncDbExportFields()
-			await updateCache()
+			const result = await refresh({ full: true, bootstrap: true })
+			await persistSyncResult(result)
 			await SEND.human(message, H.any("Done! Cache cleared and data refreshed from HTB."), false)
 			log.info("Admin cache clear completed with refresh", {
 				machines: Object.keys(DAT.MACHINES).length,
@@ -1044,7 +1090,7 @@ async function captainPusherRepost(message, parameters = {}) {
 	} else if (result.reason === "not_own_type") {
 		await SEND.human(message, "Only flag/own events can be reposted to the announce channel.", true)
 	} else if (result.reason === "target_not_in_cache") {
-		await SEND.human(message, "Target is not in cache — run `seven force update` then retry.", true)
+		await SEND.human(message, "Target could not be resolved from HTB API — it may no longer exist.", true)
 	} else if (result.reason === "member_not_resolved") {
 		await SEND.human(message, "Member could not be resolved — refresh team data then retry.", true)
 	} else if (result.reason === "discord_send_failed") {
@@ -1095,6 +1141,7 @@ async function handleMessage(message) {
 						switch (job) {
 						case "help": sendHelpMsg(message); break
 						case "admin.forceUpdateData": await forceUpdate(message); break
+						case "admin.syncSection": await admin_syncSection(message, P.section); break
 						case "admin.setHtbTokens": await admin_setHtbTokens(message, P.htbAccessToken || P.accessToken, P.htbRefreshToken || P.refreshToken); break
 						case "admin.passthruOn": if (isAdmin(message.author)) { SEND.human(message, `Parrot mode ${F.STL("ON", "bs")}. 🦜`); SEND.passthruOn() } else { SEND.human(message, "Sorry, not for you. 🦜") } break
 						case "admin.passthruOff": if (isAdmin(message.author)) { SEND.human(message, `Parrot mode ${F.STL("OFF", "bs")}. 🦜`); SEND.passthruOff() } else { SEND.human(message, "Sorry, not for you. 🦜") } break
@@ -1127,7 +1174,7 @@ async function handleMessage(message) {
 						case "getTargetOwners": SEND.embed(message, EGI.teamOwnsForTarget(DAT.resolveEnt(P.target, P.htbTargetType), undefined, P.ownType, P.ownFilter)); break
 						case "checkMemberOwnedTarget": SEND.embed(message, EGI.checkMemberOwnedTarget(DAT.resolveEnt(P.username, "member", false, message), DAT.resolveEnt(P.targetname, P.targettype), P.flagNames)); break
 						case "getFirstBox": SEND.embed(message, await EGI.infoFor("machine", "Lame")); await SEND.human(message, result.fulfillmentText); break
-						case "agent.doReboot": doFakeReboot(message, result.fulfillmentText); break
+						case "agent.doReboot": await doFakeReboot(message, result.fulfillmentText); break
 						case "getNewBox": SEND.embed(message, await EGI.infoFor("machine", DAT.getNewBoxId(), true)); break
 						case "getMemberInfo": {
 							let member = DAT.resolveEnt(P.username, "member", false, message)

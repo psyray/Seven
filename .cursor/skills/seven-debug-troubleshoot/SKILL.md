@@ -17,7 +17,7 @@ description: >-
 | Live tail | `npm run docker:logs` |
 | Console | stdout in docker logs (winston mirrors to console) |
 
-Logger modules: `[bot]`, `[datastore]`, `[htb-api]`, `[pusher-htb]`, `[notification-router]`, `[notification-store]`
+Logger modules: `[bot]`, `[datastore]`, `[htb-sync]`, `[htb-api]`, `[pusher-htb]`, `[notification-router]`, `[notification-store]`
 
 ## Diagnostic flow
 
@@ -57,7 +57,9 @@ Logger modules: `[bot]`, `[datastore]`, `[htb-api]`, `[pusher-htb]`, `[notificat
 | Token refresh fails on 2nd boot | Stale `.env` refresh vs `HTB_TOKEN_FILE` | Set both `HTB_TOKEN_FILE` + `HTB_ENV_FILE`; or `seven set htb tokens` |
 | Owns missed at boot | Channel not ready yet | Should queue — verify `DISCORD_ANNOUNCE_CHAN_ID`; captain `seven pusher repost last` |
 | Own in history but not in channel | Pusher silent or send failed | Captain: `seven pusher history` → note column; `seven pusher repost <id>` |
-| Repost fails target/member | Stale cache | `seven force update` then retry repost |
+| Fortresses/Endgames/Pro Labs = 0 after boot | Empty `{}` in DB treated as missing — should delta-fetch on boot; check `[htb-sync]` logs | `seven sync fortresses` or `seven sync all`; verify HTB token |
+| `list prolabs` shows wrong names (Trusted, Reflection…) | Default sort was id **desc** — newest mini labs first | Fixed: `list prolabs` uses id asc + `nolimit`; rebuild bot; `seven sync prolabs` if cache stale |
+| Repost fails target/member | Target not on HTB or API error | Pusher auto-fetches via `ensureCachedTarget`; retry repost; check `seven pusher history` note column |
 | No @mention on own | Account not linked | Link HTB↔Discord; check `PUSHER_MENTION_ON_OWN` |
 | Lab own not parsed | HTML format change | `IS_DEV_INSTANCE=true` → inspect `LOG_DIR/PUSHER_MSG_LOG.json` (Docker) or `cache/PUSHER_MSG_LOG.json` (local); update parser |
 
@@ -92,8 +94,9 @@ Linked DC  : N
 ```
 
 Admin commands:
-- `seven force update` → smart team sync
-- `seven clear the cache` (admin) → full re-fetch
+- `seven force update` → delta catalogs + full team refresh
+- `seven sync machines|challenges|fortresses|endgames|prolabs|specials|all` → section delta only
+- `seven clear cache` (admin) → wipe memory + delta bootstrap
 - `seven pusher status` (admin) → Pusher connection + announce queue
 
 Captain commands:
@@ -112,7 +115,7 @@ Field [object Object] did not exist
 ## Verification after fix
 
 1. Restart: `npm run docker:restart`
-2. Watch logs through all 5 sync phases (or skip message)
+2. Watch logs for `[htb-sync] Catalog delta` / `ensureTarget merged` (or skip message)
 3. Test: `seven team info`, `seven <username> rank`, `seven <machine>`
 4. Confirm `sevenbot-error.log` has no new entries
 

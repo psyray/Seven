@@ -13,7 +13,7 @@ description: >-
 ```
 User message
   → handleMessage() [bot.js]
-    → resolveEnt() OR understand() [DialogFlow]
+    → resolveEntWithEnsure() OR understand() [DialogFlow]
       → bot.js switch case
         → HtbEmbeds.method() [views/embeds.js]
           → Send.embed() / Send.human() [modules/send.js]
@@ -76,14 +76,34 @@ Object.values(fortresses)
 
 ## Direct entity queries
 
-Messages matching HTB entity names bypass DialogFlow via `DAT.resolveEnt(message.content, ...)`. New entity types need resolver logic in `SevenDatastore.resolveEnt()`.
+Messages matching HTB entity names bypass DialogFlow via `DAT.resolveEntWithEnsure(message.content, …, lookup=true)`. Unknown names trigger `ensureCachedTarget()` (single HTB fetch) before replying. Resolver logic lives in `SevenDatastore` + `helpers/htb-sync-engine.js`.
+
+## Help text
+
+Captain/admin sync commands are documented in `static/strings.js` (`sectionCaptain`, `sectionAdmin`) and mirrored in `docs/user/commands.md`. Update both when adding sync commands.
+
+## Catalog lists (`filterTargets`)
+
+Local NLP in `helpers/nlp.js` handles `list fortresses`, `list endgames`, `list prolabs`:
+
+| Type | Limit | Sort | Display |
+|------|-------|------|---------|
+| `prolab` | All (`nolimit`) | `id` asc | `standard` / `mini` suffix per HTB `mini` flag |
+| `fortress` / `endgame` | 15 (or all with `list all …`) | `id` asc | Orange guild emoji + name link |
+
+`SevenDatastore.filterEnt()` uses **ascending id** as default sort for fortress/endgame/prolab when `sortorder` is empty (avoids surfacing newest mini labs first).
+
+`filteredTargets()` skips the `limit === 0` joke error when `targetFilterBasis` contains `{ cust: "nolimit" }`.
+
+Dialogflow may still supply `targetFilterBasis` (e.g. `blang: "Active Directory"`) for the embed subtitle; local NLP merges DF basis when present for pro lab lists.
 
 ## Admin features
 
 | Intent | Function | Sync mode |
 |--------|----------|-----------|
 | `admin.forceUpdateData` | `forceUpdate()` | `{ force: true }` |
-| `admin.clearCached` | `admin_clearCached()` | `{ full: true }` |
+| `admin.syncSection` | `admin_syncSection()` | `{ sections: [...] }` — `seven sync machines` etc. |
+| `admin.clearCached` | `admin_clearCached()` | `{ full: true, bootstrap: true }` |
 | `admin.setHtbTokens` | `admin_setHtbTokens()` | local NLP: `set htb tokens …` |
 | `admin.pusherStatus` | `NOTIFICATION_ROUTER.getStatusEmbed()` | — |
 | `captain.pusherHistory` | `NOTIFICATION_ROUTER.getHistoryEmbed()` | — |
@@ -94,6 +114,7 @@ Messages matching HTB entity names bypass DialogFlow via `DAT.resolveEnt(message
 ```
 HTB Pusher → parsePusherEvent [pusher-htb.js]
   → NotificationRouter.handlePusherEvent [notification-router.js]
+    → ensureCachedTarget if target missing from cache
     → recordEvent → NotificationStore.append [notification-store.js → seven_notification_events]
     → HtbEmbeds.pusherOwn / pusherNotif / pusherTeamNotification
     → DISCORD_ANNOUNCE_CHAN (with allowedMentions for linked users)
@@ -137,4 +158,6 @@ Config: `PUSHER_*` vars via `helpers/pusher-config.js` (see `static/templates/.e
 - `helpers/notification-router.js` — announce routing, queue, fallback, repost
 - `helpers/notification-store.js` — Postgres event log
 - `helpers/pusher-config.js` — `PUSHER_*` env config
-- `static/strings.js` — help text, canned responses
+- `helpers/htb-sync-engine.js` — delta catalog sync + on-demand ensure
+- `helpers/nlp.js` — local intent overrides (`list prolabs`, sync, pusher, …)
+- `static/strings.js` — help text (`buildHelpMessages`), canned responses

@@ -20,7 +20,7 @@ Dialogflow intents map to handlers in the `switch` block of `bot.js`. Parameters
 | `getMemberRank` | `EGI.memberRank()` | Member rank embed |
 | `getMemberChart` | `sendMemberChartMsg()` | Achievement chart (Puppeteer) |
 | `filterMemberOwns` | `sendActivityMsg()` | Activity timeline + chart |
-| `filterTargets` | `EGI.filteredTargets()` | Filtered target list |
+| `filterTargets` | `EGI.filteredTargets()` | Filtered target list (machines, challenges, fortresses, endgames, pro labs) |
 | `filterMembers` | `EGI.filteredTargets()` | Filtered member rankings |
 | `getNewBox` | `EGI.infoFor(machine, newBoxId)` | Latest unreleased machine |
 | `getFirstBox` | `EGI.infoFor("machine", "Lame")` | Easter egg |
@@ -30,14 +30,15 @@ Dialogflow intents map to handlers in the `switch` block of `bot.js`. Parameters
 | `forgetMe.discordUnlink.getUserID` | `forgetHtbDataFlow("discord")` | Unlink Discord |
 | `forgetMe.all.getUserID` | `forgetHtbDataFlow("all")` | Both |
 | `unforgetMe` | `unignoreMember()` | Re-allow blacklisted member |
-| `Default Fallback Intent` | Small talk + `resolveEnt` fallback | Dialogflow fallback or entity card |
+| `Default Fallback Intent` | Small talk + `resolveEntWithEnsure` fallback | DialogFlow fallback or entity card (on-demand HTB fetch) |
 
 ## Admin / captain intents
 
 | Intent | Guard | Handler |
 |--------|-------|---------|
 | `admin.forceUpdateData` | Captain or admin | `forceUpdate()` → `refresh({ force: true })` |
-| `admin.clearCached` | Admin | `admin_clearCached()` → `refresh({ full: true })` |
+| `admin.syncSection` | Captain or admin | `admin_syncSection()` → `refresh({ sections: [...] })` |
+| `admin.clearCached` | Admin | `admin_clearCached()` → `refresh({ full: true, bootstrap: true })` |
 | `admin.setHtbTokens` | Admin | `admin_setHtbTokens()` — hot-reload OAuth pair + persistence |
 | `admin.pusherStatus` | Admin | `NOTIFICATION_ROUTER.getStatusEmbed()` |
 | `captain.pusherHistory` | Captain | `NOTIFICATION_ROUTER.getHistoryEmbed()` → `EGI.pusherHistory()` |
@@ -58,16 +59,18 @@ Dialogflow intents map to handlers in the `switch` block of `bot.js`. Parameters
 
 ## Entity resolution (outside switch)
 
-When Dialogflow doesn't match an intent, `resolveEnt()` tries to match the message text to a cached HTB entity (machine, challenge, member, etc.) and returns an info card.
+When Dialogflow doesn't match an intent, `resolveEntWithEnsure()` tries cache first, then fetches a single target from HTB if needed.
 
 Local NLP overrides in `helpers/nlp.js` (`resolveLocalIntent()`) can correct or pre-resolve intents before the switch runs.
 
-Captain/admin Pusher commands (no Dialogflow intent required):
+Captain/admin commands (no Dialogflow intent required):
 
 | Phrase | Local intent |
 |--------|--------------|
 | `pusher status` | `admin.pusherStatus` |
 | `set htb tokens <access> <refresh>` | `admin.setHtbTokens` |
+| `sync machines` / `sync fortresses` / `sync all` / … | `admin.syncSection` |
+| `list prolabs` / `list pro labs` / `list fortresses` / `list endgames` / `list all …` | `filterTargets` (catalog list; pro labs = all entries, id asc, mini/standard labels) |
 | `pusher history` / `pusher history <member>` | `captain.pusherHistory` |
 | `pusher repost last` / `pusher repost <id>` | `captain.pusherRepost` |
 
@@ -80,6 +83,7 @@ Captain/admin Pusher commands (no Dialogflow intent required):
 | `P.htbTargetType` / `P.targettype` | Target intents | Entity type hint |
 | `P.ownType` / `P.ownFilter` | Ownership intents | user/root, first/last |
 | `P.interval` | Chart intents | Time range (normalized by `normalizeChartTerm()`) |
+| `P.limit` / `P.targetFilterBasis` | `filterTargets` | Result cap; `{ cust: "nolimit" }` shows full catalog (used for `list prolabs`) |
 | `P.uid` | Link/forget intents | HTB user ID |
 
 ## Adding a new intent

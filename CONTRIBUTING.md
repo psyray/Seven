@@ -30,6 +30,7 @@ Expected startup logs:
 
 - `[DB IMPORT]::: Restored from DB backup.`
 - `[datastore] HTB data update started …` or `skipped (cache complete)`
+- `[htb-sync] Catalog delta fetching` / `Catalog delta up to date` during sync
 - `[DISCORD]::: CLIENT READY`
 
 ### Without Docker

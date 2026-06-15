@@ -10,63 +10,77 @@ description: >-
 
 ## Before editing
 
-1. Read `config/htb.js`, `modules/htb-api.js`, `models/SevenDatastore.js`
+1. Read `config/htb.js`, `modules/htb-api.js`, `helpers/htb-sync-engine.js`, `models/SevenDatastore.js`
 2. Check `AGENTS.md` sync modes table
 3. Confirm token model: `HTB_V4_TOKEN` + `HTB_REFRESH_TOKEN` (OAuth — no v3, no App Token without refresh)
 4. Persistence: `HTB_TOKEN_FILE` (priority load) + `HTB_ENV_FILE` (`.env` sync via `helpers/env-tokens.js`)
 
 ## Sync architecture
 
+All sync logic lives in **`helpers/htb-sync-engine.js`** (`HtbSyncEngine`). `SevenDatastore.update()` delegates to `syncEngine.runPlan()`.
+
 ```
-DAT.update(options)
-  ├─ getSectionsNeedingUpdate()  → which phases to run
-  ├─ [1/5] machines   → v5 list + selective v4 profiles
-  ├─ [2/5] specials   → fortresses, endgames, prolabs
-  ├─ [3/5] tags       → machine tags
-  ├─ [4/5] team       → team stats + member profiles
-  └─ [5/5] challenges → challenge list + details
+DAT.update(options) → HtbSyncEngine.runPlan()
+  ├─ diffCatalog(kind)     → API list vs cache IDs (+ stale metadata)
+  ├─ fetchAndMerge(kind)   → detail fetch for missing/stale IDs only
+  ├─ ensureTarget(type)    → on-demand (Pusher, resolveEntWithEnsure)
+  └─ sections: machines → fortresses → endgames → prolabs → tags → team → challenges
 ```
+
+| Option | Behaviour |
+|--------|-----------|
+| `{}` / boot | Partial bootstrap — missing sections only |
+| `{ delta: true }` | Hourly: all sections, delta + stale, new team members only |
+| `{ force: true }` | Delta catalogs + stale + **full** team member refresh |
+| `{ full: true, bootstrap: true }` | Clear cache admin — delta from empty |
+| `{ sections: ["fortresses"] }` | `seven sync fortresses` |
+| `{ targets: [{ type, name }] }` | Explicit ensure |
+
+Specials stored in `MISC.FORTRESSES`, `MISC.ENDGAMES`, `MISC.PROLABS`. Empty `{}` is **not** cached (`hasCachedObject`).
 
 ## Decision tree
 
 | User request | Implementation |
 |--------------|----------------|
-| Startup too slow | Ensure default `update()` skips cached sections |
-| Force update members only | `update({ force: true })` — not `full: true` |
-| Wipe and re-fetch all | `update({ full: true })` via admin clear cache |
-| Missing machines for member sync | `getMemberSyncDependencies()` auto-expands |
-| New HTB endpoint | Add to `htb-api.js`, wire in correct `update()` phase |
-| Pusher fallback / live owns | `getRecentMemberActivities()` in `htb-api.js`; wired by `notification-router.js` |
-| Notification event log | `helpers/notification-store.js` → Postgres `seven_notification_events` (not part of HTB sync cache) |
+| Pusher skip target not in cache | `ensureCachedTarget()` in `notification-router.js` before skip |
+| Startup too slow | Default boot uses `getMissingSections()` only |
+| Force update | `update({ force: true })` — delta catalogs + full team |
+| Wipe and re-fetch all | `update({ full: true, bootstrap: true })` via admin clear cache |
+| Sync one section | `update({ sections: ["machines"] })` or `seven sync machines` |
+| New HTB endpoint | Add to `htb-api.js`, wire in `HtbSyncEngine.fetchAndMerge` / `fetchCatalog` |
+| On-demand single target | `ensureTarget()` — never full section sync |
 
 ## htb-api.js checklist
 
 - [ ] Use `htbApiGet()` — never raw `fetch`/`request` without throttle
+- [ ] Bulk specials use `getCompleteFortressesByIds` / `getCompleteEndgamesByIds` / `getCompleteProlabsByIds`
+- [ ] On-demand machine: `buildMachineFromProfileIdentifier(name)`
 - [ ] Set `base: HTB_API_V5_BASE` only for v5 endpoints (machine list)
-- [ ] Normalize responses before caching (`normalizeV5Machine`, etc.)
-- [ ] Log rate-limit waits (`logRateLimitWait`) — user expects visible waits
 - [ ] Bulk ops use `logBatchProgress()` + `mapWithConcurrency()`
-- [ ] Handle paginated responses via `extractPaginatedItems()`
 
 ## Testing
 
 ```bash
-npm run docker:logs          # watch [datastore] and [htb-api] modules
-# Or locally:
+npm run test:sync
+npm run docker:logs          # watch [htb-sync], [datastore], [htb-api]
 LOG_LEVEL=debug HTB_API_LOG_REQUESTS=true node bot.js
 ```
 
-Verify logs show skipped sections when cache is warm:
-`Skipping machines fetch — using cached data`
+Look for: `Catalog delta fetching`, `ensureTarget merged`, `Catalog delta up to date`.
+
+## Help text
+
+In-bot manual: `static/strings.js` → `buildHelpMessages()` (sections `sectionCaptain`, `sectionAdmin` for sync commands).
+
+User mirror: `docs/user/commands.md`.
 
 ## Common pitfalls
 
-- **Token expired**: HTML response instead of JSON → refresh or re-login; check file vs `.env` mismatch
-- **Second Docker boot fails auth**: stale `.env` refresh token — set `HTB_TOKEN_FILE` + `HTB_ENV_FILE`
-- **Force update breaks fallback dedup**: should not — `announcedOwnKeys` is separate from HTB cache
-- **Empty team embed**: `TEAM_STATS` or `TEAM_MEMBERS` empty → run force update
-- **Rate limit silence**: ensure wait logs fire above `HTB_RATE_LIMIT_WAIT_THRESHOLD_MS`
-- **Re-fetching everything on startup**: broken `hasCachedObject()` / missing `hydrateFromDbBackup()`
+- **Empty specials in DB `{}`**: fixed — `hasCachedObject` treats as missing
+- **Token expired**: HTML response instead of JSON → refresh or re-login
+- **Force update ≠ full**: force still uses delta for catalogs; only team is fully refreshed
+- **UPDATE_LOCK**: `runPlan` holds lock; `ensureTarget` uses per-target lock and can run concurrently
+- **Pro lab list order**: HTB catalog includes high-id mini labs; `filterEnt` defaults fortress/endgame/prolab to id **asc**; `list prolabs` uses `nolimit` in `nlp.js`
 
 ## References
 

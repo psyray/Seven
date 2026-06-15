@@ -93,11 +93,16 @@ class Send {
 
 	async human(message, msg, noMention = true) {
 		return new Promise(async (resolve) => {
-			if (!msg || msg.length == 0 || msg == undefined) {
-				msg = " "
+			if (!msg || !String(msg).trim()) {
+				resolve()
+				return
 			}
 			if (this.GET_PICKLED) msg = H.any(F.getPickled(msg), F.getScrambled(msg), F.getSpoiled(msg))
-			var msgLines = msg.split(/\n|\\n/g)
+			var msgLines = msg.split(/\n|\\n/g).filter((ln) => String(ln).trim())
+			if (!msgLines.length) {
+				resolve()
+				return
+			}
 			var firstline = noMention ? false : true
 
 			await asyncForEach(msgLines, async (ln) => {
@@ -159,7 +164,6 @@ class Send {
 	async embed(message, content, noMention = true) {
 		return new Promise(resolve => {
 			if (Array.isArray(content)) {
-				// We're looking at multiple embed objects here. Let's send them in order.
 				asyncForEach(content, async (embed) => {
 					if (noMention) { await message?.channel?.send(embed) }
 					else { await message.reply(embed) }
@@ -169,8 +173,7 @@ class Send {
 				if (noMention) { message?.channel?.send(content) }
 				else { message.reply(content) }
 			}
-		}).then(message.channel.stopTyping(true))
-		//console.log('finished sending message')
+		}).then(() => message.channel.stopTyping(true))
 	}
 
 }

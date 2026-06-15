@@ -41,6 +41,8 @@ Pusher maintenance phrases (regex in `resolveLocalIntent()`):
 - `pusher status` → admin status embed
 - `pusher history` / `pusher history <member>` → captain DB history
 - `pusher repost last` / `pusher repost <id>` → captain forced announce
+- `list prolabs` / `list pro labs` → `filterTargets` with all pro labs (`nolimit`), id ascending, optional Dialogflow `blang` label preserved
+- `list fortresses` / `list endgames` / `list all <type>` → `filterTargets` catalog list (fortress/endgame: default cap 15 unless `list all`)
 
 Local NLP runs in smoke tests (`npm run test:intents`) without calling Dialogflow.
 
@@ -93,7 +95,7 @@ Workflow: `.cursor/skills/seven-discord-feature/SKILL.md`
 | Issue | Check |
 |-------|-------|
 | All queries fall through to fallback | `GOOGLE_CLOUD_PROJECT`, credentials JSON |
-| Names not recognized | Entity sync — run `force update`, check `dflow.js` logs |
+| Names not recognized | Entity sync — run `seven sync all` or `force update`, check `dflow.js` logs |
 | Wrong intent | Add training phrases in Dialogflow or local override in `nlp.js` |
 | Dev bot silent | `IS_DEV_INSTANCE=true` — only admins get responses |
 

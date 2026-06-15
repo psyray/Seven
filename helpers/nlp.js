@@ -64,6 +64,13 @@ function extractTargetNameFromMessage(content, targetType = null) {
 	return tokens.join(" ").trim()
 }
 
+function normalizeFilterBasis(raw) {
+	if (!raw) return []
+	if (Array.isArray(raw)) return raw.filter(Boolean)
+	if (typeof raw === "object") return Object.values(raw).filter(Boolean)
+	return []
+}
+
 /**
  * Resolve a local intent when DialogFlow misses or returns incomplete parameters.
  * @param {string} content - Raw user message (after "seven" prefix removal).
@@ -193,6 +200,61 @@ function resolveLocalIntent(content, dfResult = null, decodedParams = null) {
 			parameters: {
 				eventId: target === "last" ? null : Number(target),
 				useLast: target === "last",
+			},
+			allRequiredParamsPresent: true,
+		}
+	}
+
+	const syncSectionMatch = lower.match(/^sync\s+(machines?|challenges?|fortresses?|endgames?|pro\s*labs?|prolabs?|specials?|all)\s*$/)
+	if (syncSectionMatch) {
+		return {
+			intent: "admin.syncSection",
+			parameters: { section: syncSectionMatch[1].replace(/\s+/g, " ").trim() },
+			allRequiredParamsPresent: true,
+		}
+	}
+
+	const listTargetsMatch = lower.match(
+		/^list(?:\s+all)?\s+(fortresses?|endgames?|pro\s*labs?|prolabs?|machines?|boxes?|challenges?)\s*$/
+	)
+	if (listTargetsMatch) {
+		const typeKey = listTargetsMatch[1].replace(/\s+/g, "")
+		const listTypeAliases = {
+			fortress: "fortress",
+			fortresses: "fortress",
+			endgame: "endgame",
+			endgames: "endgame",
+			prolab: "prolab",
+			prolabs: "prolab",
+			machine: "machine",
+			machines: "machine",
+			box: "machine",
+			boxes: "machine",
+			challenge: "challenge",
+			challenges: "challenge",
+		}
+		const wantsAll = /\ball\b/.test(lower)
+		const targettype = listTypeAliases[typeKey] || TARGET_TYPE_ALIASES[typeKey] || typeKey
+		const isCatalogSpecial = ["fortress", "endgame", "prolab"].includes(targettype)
+		const dfBasis = normalizeFilterBasis(dfParams.targetFilterBasis)
+		let targetFilterBasis = []
+		if (targettype === "prolab") {
+			targetFilterBasis = [
+				{ cust: "nolimit" },
+				...(dfBasis.length ? dfBasis : [{ blang: "Active Directory" }]),
+			]
+		} else if (wantsAll) {
+			targetFilterBasis = [{ cust: "nolimit" }]
+		}
+		return {
+			intent: "filterTargets",
+			parameters: {
+				targettype,
+				sortby: isCatalogSpecial ? ["id"] : [],
+				sortorder: isCatalogSpecial ? "asc" : "",
+				limit: (wantsAll || targettype === "prolab") ? 0 : 15,
+				memberName: [],
+				targetFilterBasis,
 			},
 			allRequiredParamsPresent: true,
 		}

@@ -22,7 +22,7 @@ Seven can provide information about:
 - Ownage (e.g. which team members did what on HTB)
 - Team members — profiles, ranks, achievement charts
 - Team details, global rank, and leaderboards
-- Filtered lists (hardest boxes, linux machines, incomplete challenges, …)
+- Filtered lists (hardest boxes, linux machines, incomplete challenges, `list prolabs`, …)
 - Real-time achievement notifications in your announce channel
 
 ## 🃏 Talking to Seven

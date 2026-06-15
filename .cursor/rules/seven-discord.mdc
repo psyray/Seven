@@ -27,7 +27,7 @@ When cache is empty, return helpful embeds (not crash):
 if (!this.ds.TEAM_STATS?.name) {
   return this.ERROR_BASE
     .setTitle("Team data unavailable")
-    .setDescription("HTB team data is not loaded yet. Try `seven force update`…")
+    .setDescription("HTB team data is not loaded yet. Try `seven force update` or `seven sync team`…")
 }
 ```
 
@@ -47,6 +47,16 @@ Central entity resolver in `SevenDatastore`. Always pass `discordMessage` for se
 2. Handler case in `bot.js`
 3. Embed method in `HtbEmbeds` (views/embeds.js)
 4. If new entity type: update `helpers/dflow.js` entity sync + `helpers/classes.js`
+5. User-facing help: `static/strings.js` + `docs/user/commands.md`
+
+## Catalog target lists
+
+`filterTargets` + `filteredTargets()` / `filteredTargetString()`:
+
+- `list prolabs` — all pro labs, id ascending, `standard` / `mini` label from `target.mini`
+- `list fortresses` / `list endgames` — default cap 15 unless `list all …`
+- Fortress/endgame/prolab default sort in `filterEnt`: id **asc** when `sortorder` empty
+- `{ cust: "nolimit" }` in `targetFilterBasis` bypasses slice cap; embed must allow `limit === 0` with nolimit
 
 ## Admin commands
 

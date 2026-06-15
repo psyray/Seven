@@ -66,7 +66,21 @@ class HtbEmbeds {
 		if (identifier == "i" && !(H.sAcc(target,"type"))) {
 			return this.ENTITY_UNFOUND.setTitle("Hmm...").setDescription(`**I only know you on Discord${discordMessage ? `, ${discordMessage.author.username}`: ""}.**\nPlease indicate your username on Hack The Box (I won't make assumptions even if it's the same) -- like "seven i am [username] on hackthebox". I'll link things up properly then. 👋`)
 		}
-		target = (target && target.type? target: this.ds.resolveEnt(identifier, type, isId, discordMessage) || { type: null })
+		target = (target && target.type ? target : this.ds.resolveEnt(identifier, type, isId, discordMessage, false))
+		if ((!target || !target.type) && identifier && this.ds.ensureCachedTarget) {
+			const normalizeType = (value) => (value === "starting_point" ? "machine" : value)
+			const typesToTry = type
+				? [normalizeType(type)]
+				: ["machine", "challenge", "fortress", "endgame", "prolab"]
+			for (const tryType of typesToTry) {
+				const ensured = await this.ds.ensureCachedTarget(tryType, identifier, { trigger: "infoFor" })
+				if (ensured) {
+					target = ensured
+					break
+				}
+			}
+		}
+		if (!target || !target.type) target = { type: null }
 		if (target.country_name) { // A living, breathing human being
 			target.type = "member"
 		}
@@ -268,17 +282,16 @@ class HtbEmbeds {
 			break
 		}
 		case "prolab": {
-			console.log(target)
-			let { id, name, release_at, pro_machines_count, pro_flags_count, flags,
-				ownership, user_eligible_for_certificate, is_new, skill_level,
-				designated_category, team, level, lab_servers_count, cover_img_url,
-				version, entry_points, description, video_url, cover_image_url,
-				active_users, lab_master, type, excerpt, social_links, new_version,
-				overview_image_url, designated_level} = target
-			let creators = [lab_master]
-			description = description.replace(`<h4>${name}</h4>`, "").trim()
-			description = td.turndown(description)
-			description = F.convertProLabDescription(description)
+			let { name, flags,
+				entry_points, description, type } = target
+			const creators = target.lab_masters?.length
+				? target.lab_masters
+				: (target.lab_master ? [target.lab_master] : [])
+			if (description) {
+				description = description.replace(`<h4>${name}</h4>`, "").trim()
+				description = td.turndown(description)
+				description = F.convertProLabDescription(description)
+			}
 			var prolab_avatar = null
 			try {
 				const agent = request.agent()
@@ -287,15 +300,19 @@ class HtbEmbeds {
 			} catch (error) {
 				console.error(error)
 			}
+			const masterThumb = creators[0]?.avatar_thumb || target.avatar_48_url || target.avatar_url
 			embed.attachFiles(new Attachment(F.getIcon(type), `${type}.png`))
 				.attachFiles(new Attachment(prolab_avatar || F.getIcon(type), `${name}.png`))
 				.setAuthor(`${F.special2Proper(type)}: ${name}`, `attachment://${type}.png`, F.profileUrl(target))
-				.setThumbnail(F.avatar2Url(lab_master.avatar_thumb))
-				.setImage(`attachment://${name}.png`)
+			if (masterThumb) embed.setThumbnail(F.avatar2Url(masterThumb))
+			embed.setImage(`attachment://${name}.png`)
 				.setFooter("🠔 The same logo, but smaller!",`attachment://${name}.png`)
-				.setDescription(`${F.aOrAn(type)} ${F.special2Proper(type)} by **${F.memberToMdLink(creators[0],true,this.ds.tryDiscordifyUid(creators[0].id))}` +
-				`${(creators.length > 1 ? "** & **" + F.memberToMdLink(creators[1]) : "")}**.` +
-				(description? `\n${description}` : ""))
+			const creatorLine = creators.length
+				? ` by **${F.memberToMdLink(creators[0], true, this.ds.tryDiscordifyUid(creators[0].id))}` +
+					`${(creators.length > 1 ? "** & **" + F.memberToMdLink(creators[1]) : "")}**`
+				: ""
+			embed.setDescription(`${F.aOrAn(type)} ${F.special2Proper(type)}${creatorLine}.` +
+				(description ? `\n${description}` : ""))
 			
 			if (entry_points && entry_points.length) {
 				embed.addField(`${(entry_points.length != 1? "Entry Points": "Entry Point")}`, `${entry_points.map(ep=>`**[\`${ep}\`](http://${ep}/)**`).join("\n")}`)
@@ -583,20 +600,22 @@ class HtbEmbeds {
 	}
 
 	filteredTargets(targets, sortend="release date", inf={}, message={}){
-		// console.warn(targets)
-		var inc = inf.targetFilterBasis.some(e => (e.cust || "").includes("incomplete"))
-		var memCount = inf.memberName.length
+		if (!Array.isArray(targets)) targets = []
+		const filterBasis = inf.targetFilterBasis || []
+		var inc = filterBasis.some(e => (e.cust || "").includes("incomplete"))
+		var memCount = inf.memberName?.length || 0
 		var owners = F.andifyList(
-			inf.memberName.map(
+			(inf.memberName || []).map(
 				e => F.memberToMdLink(
 					this.ds.resolveEnt(e,"member",false,message),	true,
 					(checkSelfName(e) ? "you" : this.ds.tryDiscordifyUid(this.ds.resolveEnt(e,"member",false,message))))),
 			null,inc)
-		var filterRuleDescription = inf.targetFilterBasis.filter(e => (e.cust && !["complete", "incomplete"].includes(e.cust) ) || e.ccat || e.bpath || e.bsub || e.blang).map(e => Object.values(e)[0]).join(", ")
+		var filterRuleDescription = filterBasis.filter(e => (e.cust && !["complete", "incomplete"].includes(e.cust) ) || e.ccat || e.bpath || e.bsub || e.blang).map(e => Object.values(e)[0]).join(", ")
 		if (filterRuleDescription){
 			filterRuleDescription = ` (${filterRuleDescription})`
 		}
-		if (inf.limit === 0) {
+		const hasNoLimit = filterBasis.some(e => e.cust === "nolimit")
+		if (inf.limit === 0 && !hasNoLimit) {
 			return this.ERROR_BASE.setDescription(H.any("```css\n[ERROR: MALPRACTICE DETECTED]```", `\`\`\`css\nError: User ${F.STL(message.author.username,"bs")} appears to be broken.\`\`\``) +" Suspicious request specified **[0](http://0)** results...? " + H.any("👀","🙄","😂","👀"))
 		}
 		if (targets.length == 0 && inf.limit !== 0){
@@ -604,8 +623,8 @@ class HtbEmbeds {
 				.attachFiles(new Attachment(F.getIcon("complete"), "icon.png"))
 				.setAuthor("Filtered Targets", "attachment://icon.png", F.teamProfileUrl(this.ds.TEAM_STATS))
 				.setDescription("_"+`${F.toTitleCase(inf.targettype)} target${(targets.length != 1 ? "s" : "")} ${filterRuleDescription}`
-				+ ((inf.memberName.length && inf.targetFilterBasis.some(e => (e.cust || "").includes("complete"))) ? ( inc ? " not yet owned by ": " completed by ")+ owners : "")
-				+(sortend[0] ? `, sorted by ${inf.sortby[0]} ` : " ")+"_")
+				+ ((memCount && filterBasis.some(e => (e.cust || "").includes("complete"))) ? ( inc ? " not yet owned by ": " completed by ")+ owners : "")
+				+(sortend?.[0] ? `, sorted by ${inf.sortby?.[0] || sortend[0]} ` : " ")+"_")
 			if (owners) {
 				if (inc) {
 					return zeroEmbed
@@ -614,15 +633,15 @@ class HtbEmbeds {
 							"Incredible!!!",
 							"Zany!", "Bonkers!!!", "😲", "🤯", "OMG!!!",
 							"What on earth..?!"), `Looks like ${owners} ${inf.memberName.length > 1 || (memCount ==1 && checkSelfName(inf.memberName[0]))? "have" : "has"} ${memCount > 1 ? "cumulatively " : ""}${H.any("dominated","owned", "beat", "hacked")} them all! 👑\n(Is that even possible???)`)
-				} else {
-					return zeroEmbed
-						.addField(H.any("Absolutely no matches found!",
-							"Nothing matched!",
-							"No results!!!",
-							"*crickets chirp*",
-							"Zero results whatsoever!"), `It appears ${owners} ${inf.memberName.length > 1 || (memCount ==1 && checkSelfName(inf.memberName[0])) ? "haven't" : "hasn't"} ${memCount > 1 ? (memCount == 2 ? "(both) " : "(all) ") : ""}${H.any("got","owned", "completed", "finished")} any of the matched targets!!! 😿`)
 				}
+				return zeroEmbed
+					.addField(H.any("Absolutely no matches found!",
+						"Nothing matched!",
+						"No results!!!",
+						"*crickets chirp*",
+						"Zero results whatsoever!"), `It appears ${owners} ${inf.memberName.length > 1 || (memCount ==1 && checkSelfName(inf.memberName[0])) ? "haven't" : "hasn't"} ${memCount > 1 ? (memCount == 2 ? "(both) " : "(all) ") : ""}${H.any("got","owned", "completed", "finished")} any of the matched targets!!! 😿`)
 			}
+			return zeroEmbed
 		}
 		var embeds = []
 		var chunkedTargets = this.embedSubdivide(targets || [], this.filteredTargetString, 800, 5500, 15) || []
@@ -632,8 +651,8 @@ class HtbEmbeds {
 					.attachFiles(new Attachment(F.getIcon("complete"), "icon.png"))
 					.setAuthor("Filtered Targets", "attachment://icon.png", F.teamProfileUrl(this.ds.TEAM_STATS))
 					.setDescription(`📊 Showing ${targets.length}${filterRuleDescription} ${inf.targettype} target${(targets.length != 1 ? "s" : "")}`
-					+ ((inf.memberName.length && inf.targetFilterBasis.some(e => (e.cust || "").includes("complete"))) ? ( inc ? " not yet owned by ": " completed by ")+ owners : "")
-					+(sortend[0] ? `, sorted by ${inf.sortby[0]} ` : " "))
+					+ ((memCount && filterBasis.some(e => (e.cust || "").includes("complete"))) ? ( inc ? " not yet owned by ": " completed by ")+ owners : "")
+					+(sortend?.[0] ? `, sorted by ${inf.sortby?.[0] || sortend[0]} ` : " "))
 					.addFields(embeddableGroup.map((e,idx) => ({inline: true, name:`${idx+1}/${embeddableGroup.length}`,value:`${e.map(x => x.str).join("\n")}`}))))
 			}
 		})
@@ -891,7 +910,10 @@ class HtbEmbeds {
 		case "challenge":	return `${this.E.of(target.category_name)}${this.E.of(F.targetDifficultyToEmojiName(target))}${this.E.of(F.targetRatingToEmojiName(target))}` + " " + F.mdLink(`\`${target.name}\``, F.profileUrl(target), false, target.category_name)
 		case "endgame":		return `${this.E.of("endgame")}` + " [`"+target.name+"`]("+F.profileUrl(target)+")"
 		case "fortress":	return `${this.E.of("fortress")}` + " [`"+target.name+"`]("+F.profileUrl(target)+")"
-		case "prolab":		return `${this.E.of(target.name.toLowerCase())}` + " [`"+target.name+"`]("+F.profileUrl(target)+")"
+		case "prolab": {
+			const tier = target.mini ? F.STL("mini", "s") : F.STL("standard", "n")
+			return `${this.E.of(target.name.toLowerCase())} ${tier} ` + F.mdLink(`\`${target.name}\``, F.profileUrl(target), false, tier)
+		}
 		default: return ""
 		}
 		// return F.mdLink(target.name,"http://0", true, F.timeSinceSmall(new Date(date)))

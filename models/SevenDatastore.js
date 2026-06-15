@@ -32,10 +32,11 @@ const { HtbApiConnector: V4 } = require("../modules/htb-api.js")
 const dFlowEnt = require("../helpers/dflow")
 const { Helpers: H } = require("../helpers/helpers.js")
 const { createLogger } = require("../helpers/logger.js")
+const { HtbSyncEngine, UPDATE_SECTION_ORDER } = require("../helpers/htb-sync-engine.js")
 
 const log = createLogger("datastore")
 
-const UPDATE_SECTION_ORDER = ["machines", "specials", "tags", "team", "challenges"]
+const UPDATE_SECTION_ORDER_LEGACY = UPDATE_SECTION_ORDER
 
 class SevenDatastore {
 	constructor() {
@@ -50,6 +51,7 @@ class SevenDatastore {
 		this.MISC = {}
 		this.CHALLENGES = {}
 		this.DISCORD_LINKS = {}
+		this.syncEngine = new HtbSyncEngine(this, this.V4API)
 	}
 
 	/**
@@ -110,6 +112,15 @@ class SevenDatastore {
 	}
 	get vC() {
 		return Object.values(this.CHALLENGES)
+	}
+	get vF() {
+		return Object.values(this.MISC?.FORTRESSES || {})
+	}
+	get vE() {
+		return Object.values(this.MISC?.ENDGAMES || {})
+	}
+	get vP() {
+		return Object.values(this.MISC?.PROLABS || {})
 	}
 	get vD() {
 		return Object.values(this.DISCORD_LINKS)
@@ -188,27 +199,19 @@ class SevenDatastore {
 		const deps = []
 		if (!this.hasCachedObject(this.MACHINES)) deps.push("machines")
 		if (!this.hasCachedObject(this.CHALLENGES)) deps.push("challenges")
-		if (
-			this.MISC.FORTRESSES === undefined
-			|| this.MISC.ENDGAMES === undefined
-			|| this.MISC.PROLABS === undefined
-		) {
-			deps.push("specials")
-		}
+		if (!this.hasCachedObject(this.MISC?.FORTRESSES)) deps.push("fortresses")
+		if (!this.hasCachedObject(this.MISC?.ENDGAMES)) deps.push("endgames")
+		if (!this.hasCachedObject(this.MISC?.PROLABS)) deps.push("prolabs")
 		return deps
 	}
 
 	getMissingSections() {
 		const sections = []
 		if (!this.hasCachedObject(this.MACHINES)) sections.push("machines")
-		if (
-			this.MISC.FORTRESSES === undefined
-			|| this.MISC.ENDGAMES === undefined
-			|| this.MISC.PROLABS === undefined
-		) {
-			sections.push("specials")
-		}
-		if (!this.hasCachedObject(this.MISC.MACHINE_TAGS)) sections.push("tags")
+		if (!this.hasCachedObject(this.MISC?.FORTRESSES)) sections.push("fortresses")
+		if (!this.hasCachedObject(this.MISC?.ENDGAMES)) sections.push("endgames")
+		if (!this.hasCachedObject(this.MISC?.PROLABS)) sections.push("prolabs")
+		if (!this.hasCachedObject(this.MISC?.MACHINE_TAGS)) sections.push("tags")
 		if ((process.env.HTB_TEAM_ID || process.env.HTB_UNIVERSITY_ID) && !this.hasCachedTeamData()) {
 			sections.push("team")
 		}
@@ -217,11 +220,16 @@ class SevenDatastore {
 	}
 
 	sortUpdateSections(sections) {
-		return UPDATE_SECTION_ORDER.filter(section => sections.includes(section))
+		return UPDATE_SECTION_ORDER_LEGACY.filter(section => sections.includes(section))
 	}
 
 	expandUpdateSections(requested) {
 		const set = new Set(requested)
+		if (set.has("specials")) {
+			set.add("fortresses")
+			set.add("endgames")
+			set.add("prolabs")
+		}
 		if (set.has("team")) {
 			this.getMemberSyncDependencies().forEach(dep => set.add(dep))
 		}
@@ -231,34 +239,27 @@ class SevenDatastore {
 	getSectionsNeedingUpdate(options = {}) {
 		const force = Boolean(options.force)
 		const full = Boolean(options.full)
+		const delta = Boolean(options.delta)
+		const bootstrap = Boolean(options.bootstrap)
 		const sections = options.sections
 
-		if (full) {
-			return [...UPDATE_SECTION_ORDER]
+		if (full || bootstrap) {
+			return [...UPDATE_SECTION_ORDER_LEGACY]
+		}
+
+		if (delta || force) {
+			return [...UPDATE_SECTION_ORDER_LEGACY]
 		}
 
 		if (Array.isArray(sections) && sections.length) {
 			return this.expandUpdateSections(sections)
 		}
 
-		if (force) {
-			return this.expandUpdateSections(["team"])
-		}
-
 		return this.getMissingSections()
 	}
 
 	describeUpdatePlan(sectionsToUpdate, options = {}) {
-		if (options.full) return "full refresh (all sections)"
-		if (options.force) {
-			const deps = sectionsToUpdate.filter(section => section !== "team")
-			if (deps.length) {
-				return `smart sync: team members + missing dependencies (${deps.join(", ")})`
-			}
-			return "smart sync: team members only"
-		}
-		if (!sectionsToUpdate.length) return "skipped (cache complete)"
-		return `partial bootstrap (${sectionsToUpdate.join(", ")})`
+		return this.syncEngine.describeUpdatePlan(sectionsToUpdate, options)
 	}
 
 	extractSpecialTargetFlagNames(flags) {
@@ -311,271 +312,43 @@ class SevenDatastore {
 		log.info(`[${phase}] ${message}`, meta)
 	}
 
-	async update(options = {}) {
-		const full = Boolean(options.full)
-		const force = Boolean(options.force)
-		const sectionsToUpdate = this.getSectionsNeedingUpdate(options)
-		const updatePlan = this.describeUpdatePlan(sectionsToUpdate, options)
+	async ensureCachedTarget(type, nameOrId, ctx = {}) {
+		return this.syncEngine.ensureTarget(type, nameOrId, ctx)
+	}
 
-		if (!sectionsToUpdate.length) {
-			log.info("HTB data update skipped — using cached DB data", {
-				machines: Object.keys(this.MACHINES).length,
-				challenges: Object.keys(this.CHALLENGES).length,
-				members: Object.keys(this.TEAM_MEMBERS).length,
-				lastUpdate: this.LAST_UPDATE,
-			})
-			return false
-		}
+	async resolveEntWithEnsure(
+		kwd,
+		targetType = null,
+		isIdLookup = false,
+		discordMessage = null,
+		lookup = false
+	) {
+		const resolved = this.resolveEnt(kwd, targetType, isIdLookup, discordMessage, false)
+		if (resolved || !lookup || !kwd) return resolved
 
-		if (!this.UPDATE_LOCK) {
-			this.UPDATE_LOCK = true
-			const updateStarted = Date.now()
-			this.logUpdateProgress(`HTB data update started (${updatePlan})`)
-			try {
-				if (sectionsToUpdate.includes("machines")) {
-					const machinesStarted = Date.now()
-					this.logUpdatePhase("1/5", "Fetching machines (v5 list + selective v4 profiles)")
-					var MACHINES_V4 = await this.V4API.getAllCompleteMachineProfiles()
-					log.info("Fetching starting point machines")
-					this.MISC.STARTING_POINT_MACHINES = await this.V4API.getAllStartingPointMachines()
+		const ensureType = (type) => (type === "starting_point" ? "machine" : type)
 
-					this.MACHINES = Object.assign({}, MACHINES_V4, this.MISC.STARTING_POINT_MACHINES)
-
-					log.info("Machines collected", {
-						total: Object.keys(this.MACHINES).length,
-						v4Profiles: Object.keys(MACHINES_V4).length,
-						startingPoint: Object.keys(this.MISC.STARTING_POINT_MACHINES).length,
-						durationMs: Date.now() - machinesStarted,
-					})
-				} else {
-					log.info("Skipping machines fetch — using cached data", {
-						count: Object.keys(this.MACHINES).length,
-					})
-				}
-
-				if (sectionsToUpdate.includes("specials")) {
-					const specialsStarted = Date.now()
-					this.logUpdatePhase("2/5", "Fetching fortresses, endgames and pro labs")
-					if (full || this.MISC.FORTRESSES === undefined) {
-						this.MISC.FORTRESSES = await this.V4API.getAllFortresses()
-					}
-					if (full || this.MISC.ENDGAMES === undefined) {
-						this.MISC.ENDGAMES = await this.V4API.getAllEndgames()
-					}
-					if (full || this.MISC.PROLABS === undefined) {
-						this.MISC.PROLABS = await this.V4API.getAllProlabs()
-					}
-					log.info("Special targets collected", {
-						fortresses: Object.keys(this.MISC.FORTRESSES || {}).length,
-						endgames: Object.keys(this.MISC.ENDGAMES || {}).length,
-						prolabs: Object.keys(this.MISC.PROLABS || {}).length,
-						durationMs: Date.now() - specialsStarted,
-					})
-				} else {
-					log.info("Skipping specials fetch — using cached data")
-				}
-
-				if (sectionsToUpdate.includes("tags")) {
-					const tagsStarted = Date.now()
-					this.logUpdatePhase("3/5", "Fetching machine tags")
-					var mt = await this.V4API.getMachineTags()
-					this.MISC.MACHINE_TAGS = mt
-					log.info("Machine tags collected", {
-						categories: Object.keys(this.MISC.MACHINE_TAGS).length,
-						durationMs: Date.now() - tagsStarted,
-					})
-				} else {
-					log.info("Skipping machine tags fetch — using cached data")
-				}
-
-				if (sectionsToUpdate.includes("team")) {
-					const teamStarted = Date.now()
-					this.logUpdatePhase("4/5", "Fetching team / university data and member profiles")
-					const shouldRefreshTeamStats = full || !this.hasCachedTeamStats()
-					const shouldRefreshTeamMembers = full || force || !this.hasCachedObject(this.TEAM_MEMBERS)
-
-					if (process.env.HTB_TEAM_ID) {
-						log.info("Using HTB_TEAM_ID", { teamId: process.env.HTB_TEAM_ID })
-						if (shouldRefreshTeamStats) {
-							log.info("Fetching team profile")
-							this.TEAM_STATS = await this.V4API.getCompleteTeamProfile(
-								process.env.HTB_TEAM_ID
-							)
-							delete this.TEAM_STATS.weekly
-							log.info("Team profile ready", { name: this.TEAM_STATS?.name })
-						} else {
-							log.info("Skipping team stats — using cached profile", { name: this.TEAM_STATS?.name })
-						}
-
-						if (shouldRefreshTeamMembers) {
-							var TEAM_MEMBERS_BASE = await this.V4API.getTeamMembers(
-								process.env.HTB_TEAM_ID,
-								Object.keys(this.TEAM_MEMBERS_IGNORED)
-							)
-							log.info("Team members listed", { count: TEAM_MEMBERS_BASE.length })
-							this.TEAM_MEMBERS =
-								await this.V4API.getCompleteMemberProfilesByMemberPartials(
-									TEAM_MEMBERS_BASE
-								)
-							log.info("Team member profiles ready", { count: Object.keys(this.TEAM_MEMBERS).length })
-						} else {
-							log.info("Skipping team members — using cached profiles", {
-								count: Object.keys(this.TEAM_MEMBERS).length,
-							})
-						}
-					} else if (process.env.HTB_UNIVERSITY_ID) {
-						log.info("Using HTB_UNIVERSITY_ID", { universityId: process.env.HTB_UNIVERSITY_ID })
-						if (shouldRefreshTeamMembers) {
-							var UNI_MEMBERS_BASE = await this.V4API.getUniversityMembers(
-								process.env.HTB_UNIVERSITY_ID,
-								Object.keys(this.TEAM_MEMBERS_IGNORED)
-							)
-							this.TEAM_MEMBERS =
-								await this.V4API.getCompleteMemberProfilesByMemberPartials(
-									UNI_MEMBERS_BASE
-								)
-							log.info("University member profiles ready", { count: Object.keys(this.TEAM_MEMBERS).length })
-						}
-						if (shouldRefreshTeamStats || !this.hasCachedTeamStats()) {
-							var uniMembersForCaptain = shouldRefreshTeamMembers
-								? UNI_MEMBERS_BASE
-								: await this.V4API.getUniversityMembers(
-									process.env.HTB_UNIVERSITY_ID,
-									Object.keys(this.TEAM_MEMBERS_IGNORED)
-								)
-							var uniProfile = await this.V4API.getUniversityProfile(
-								process.env.HTB_UNIVERSITY_ID
-							)
-							var captain = uniMembersForCaptain.find(member => member.role === "admin") || uniMembersForCaptain[0]
-							this.TEAM_STATS = Object.assign({}, uniProfile || {}, {
-								avatar_url: `https://www.hackthebox.com/storage/universities/${Number(
-									process.env.HTB_UNIVERSITY_ID
-								)}.png`,
-								type: "university",
-								captain: captain ? { id: captain.id, name: captain.name } : null,
-							})
-						}
-					} else {
-						log.warn("No HTB_TEAM_ID or HTB_UNIVERSITY_ID configured — skipping team data")
-					}
-
-					log.info("Team data collected", {
-						teamName: this.TEAM_STATS?.name || null,
-						members: Object.keys(this.TEAM_MEMBERS).length,
-						durationMs: Date.now() - teamStarted,
-					})
-				} else {
-					log.info("Skipping team fetch — using cached data", {
-						members: Object.keys(this.TEAM_MEMBERS).length,
-					})
-				}
-				var names = this.vTM.map((e) => e.name.toLowerCase())
-
-				if (sectionsToUpdate.includes("challenges")) {
-					const challengesStarted = Date.now()
-					this.logUpdatePhase("5/5", "Fetching challenges and categories")
-					this.CHALLENGES = await this.V4API.getAllCompleteChallengeProfiles()
-					this.MISC.CHALLENGE_CATEGORIES =
-						await this.V4API.getChallengeCategories()
-					log.info("Challenges collected", {
-						challenges: Object.keys(this.CHALLENGES).length,
-						categories: Object.keys(this.MISC.CHALLENGE_CATEGORIES || {}).length,
-						durationMs: Date.now() - challengesStarted,
-					})
-				} else {
-					log.info("Skipping challenges fetch — using cached data", {
-						count: Object.keys(this.CHALLENGES).length,
-					})
-				}
-
-				this.logUpdatePhase("sync", "Updating Dialogflow entities")
-				try {
-					dFlowEnt.updateEntity(
-						this.getDialogflowSpecialTargetFlagNames(),
-						"specialTargetFlagName"
-					)
-					dFlowEnt.updateEntity(
-						[...new Set([this.MISC.FORTRESSES, this.MISC.ENDGAMES, this.MISC.PROLABS].map(e => Object.values(e || {})).flat().map(e => e?.name).filter(Boolean))],
-						"specialTargetName"
-					)
-					dFlowEnt.updateEntity(
-						Object.values(this.MISC.CHALLENGE_CATEGORIES || {}).map(
-							(category) => category.name
-						),
-						"challengeCategoryName"
-					)
-
-					/**
-					 * TODO: UPDATE THIS, NOW HTB USES DIFFERENT TAG NUMBERING (e.g. no programming language tag)
-					 */
-					// dFlowEnt.updateEntity(
-					// 	this.MISC.MACHINE_TAGS["7"].tags.map((attackPath) => attackPath.name),
-					// 	"boxAttackPath"
-					// )
-					// dFlowEnt.updateEntity(
-					// 	this.MISC.MACHINE_TAGS["11"].tags.map((attackSub) => attackSub.name),
-					// 	"boxAttackSub"
-					// )
-					// dFlowEnt.updateEntity(
-					// 	this.MISC.MACHINE_TAGS["9"].tags.map((attackLang) => attackLang.name),
-					// 	"boxLanguage"
-					// )
-					dFlowEnt.updateEntity(
-						Object.values(this.MACHINES).map((machine) => machine.name),
-						"Machines"
-					)
-					dFlowEnt.updateEntity(
-						Object.values(this.TEAM_MEMBERS).map((member) => ({
-							value: member.name,
-							synonyms: [
-								member.name,
-								...this.getDiscordUserSynonymsForUid(member.id, names),
-							],
-						})),
-						"memberName"
-					)
-					dFlowEnt.updateEntity(
-						Object.values(this.CHALLENGES).map((challenge) => challenge.name),
-						"challenge"
-					)
-				} catch (error) {
-					log.warn("Dialogflow entity sync failed", { message: error.message })
-				}
-
-				/* TO HANDLE EXPORTS WITHOUT DB (USING LOCAL JSON FILES ( useful for dev )):::
-							|  exportData(MACHINES, "machines.json")
-							|  exportData(CHALLENGES, "challenges.json")
-							|  exportData(TEAM_MEMBERS, "team_members.json");
-							|  exportData(TEAM_MEMBERS_IGNORED, "team_members_ignored.json")
-							|  exportData(DISCORD_LINKS, "discord_links.json")
-							\  exportData(TEAM_STATS, "team_stats.json")  */
-				this.LAST_UPDATE = new Date()
-				this.MISC.lastUpdate = this.LAST_UPDATE.toISOString()
-				this.syncDbExportFields()
-				this.UPDATE_LOCK = false
-				this.logUpdateProgress("HTB data update completed", {
-					machines: Object.keys(this.MACHINES).length,
-					challenges: Object.keys(this.CHALLENGES).length,
-					members: Object.keys(this.TEAM_MEMBERS).length,
-					teamName: this.TEAM_STATS?.name || null,
-					plan: updatePlan,
-					sections: sectionsToUpdate,
-					durationMs: Date.now() - updateStarted,
-				})
-				return true
-			} catch (error) {
-				log.error("HTB data update failed", {
-					message: error.message,
-					stack: error.stack,
-					durationMs: Date.now() - updateStarted,
-				})
-				this.UPDATE_LOCK = false
-				throw error
+		if (targetType) {
+			const type = ensureType(targetType)
+			if (type === "member") {
+				return this.resolveEnt(kwd, targetType, isIdLookup, discordMessage, true)
 			}
-		} else {
-			log.warn("HTB data update skipped — another update is already in progress")
-			return false
+			return this.ensureCachedTarget(type, kwd, { trigger: "resolveEnt" })
 		}
+
+		for (const type of ["machine", "challenge", "fortress", "endgame", "prolab"]) {
+			const entity = await this.ensureCachedTarget(type, kwd, { trigger: "resolveEnt" })
+			if (entity) return entity
+		}
+		return false
+	}
+
+	async update(options = {}) {
+		return this.syncEngine.runPlan(options)
+	}
+
+	getLastSyncDbFields() {
+		return this.syncEngine.getMergedDbFields()
 	}
 
 	/**
@@ -602,6 +375,7 @@ class SevenDatastore {
 	) {
 		var sorter = undefined
 		var targets = []
+		const sortKeys = Array.isArray(sortBy) ? sortBy : (sortBy ? [sortBy] : [])
 		if (
 			!targetFilterBases.some((e) => e.cust == "incomplete") &&
 			!targetFilterBases.some((e) => e.cust == "complete")
@@ -630,20 +404,20 @@ class SevenDatastore {
 				targets = this.vC
 				break
 			case "endgame":
-				targets = this.MISC.SPECIALS["Endgame"]
+				targets = this.vE
 				break
 			case "fortress":
-				targets = this.MISC.SPECIALS["Fortress"]
+				targets = this.vF
 				break
 			case "prolab":
-				targets = this.MISC.SPECIALS["Pro Labs"]
+				targets = this.vP
 				break
 			default:
 				break
 		}
 
 		/** SET HOW THE ARRAY WILL BE PRE-SORTED */
-		switch (sortBy[0]) {
+		switch (sortKeys[0]) {
 			case "best rated":
 				console.warn("SORTED BY BEST rATED")
 				if (targetType == "machine") {
@@ -809,22 +583,28 @@ class SevenDatastore {
 			}
 		})
 
-		const process = (arr, sortOrder, key, limit) => {
+		const sortKey = sortKeys[0] || "id"
+		const catalogTypes = ["fortress", "endgame", "prolab"]
+		const effectiveSortOrder = sortOrder || (catalogTypes.includes(targetType) ? "asc" : "desc")
+
+		const process = (arr, resolvedSortOrder, key, resultLimit) => {
 			return [...arr]
 				.sort(
 					sorter
 						? sorter
-						: (a, b) => (a[key] - b[key]) * (sortOrder == "asc" ? 1 : -1)
+						: (a, b) => (a[key] - b[key]) * (resolvedSortOrder == "asc" ? 1 : -1)
 				)
-				.slice(0, limit ? limit : 999999)
+				.slice(0, resultLimit ? resultLimit : 999999)
 		}
 		// console.log(targets)
 		try {
-			return process(targets, sortOrder, sortBy || "id", limit)
+			return process(targets, effectiveSortOrder, sortKey, limit)
 		} catch (error) {
 			console.warn(
-				`No entities returned by these filter settings (EntType: ${targetType} | SortOrder: ${sortOrder} | SortBy: ${sortBy} | Limit: ${limit})`
+				`No entities returned by these filter settings (EntType: ${targetType} | SortOrder: ${sortOrder} | SortBy: ${sortKey} | Limit: ${limit})`,
+				error.message
 			)
+			return []
 		}
 	}
 
@@ -934,7 +714,7 @@ class SevenDatastore {
 				result["machine"] = this.getMachineByName(kwd)
 				result["challenge"] = this.getChallengeByName(kwd)
 				result["special"] = this.getSpecialByName(kwd)
-				result["specialFlag"] = this.getSpecialFlagByName(kwd)
+				result["specialFlag"] = !/\s/.test(kwd) ? this.getSpecialFlagByName(kwd) : null
 				if (
 					lookup &&
 					!/\s/.test(kwd) &&
@@ -1101,37 +881,49 @@ class SevenDatastore {
 	 * @returns {Object}
 	 */
 	getSpecialFlagByName(name) {
-		// Return endgame, fortress or pro lab with name matching parameter string
-		if (this.MISC.SPECIALS) {
-			var specialTargetResolved = Object.values(this.MISC.SPECIALS)
-				.flat()
-				.map((e) => ({
-					parent: e,
-					flag: Object.values(e.flags)
-						.map((f, i) => ({ name: f, idx: i + 1 }))
-						.find(
-							(f) =>
-								f.name.replace(/\W/g, "").toLowerCase() ==
-								name.replace(/\W/g, "").toLowerCase()
-						),
-				}))
-				.flat()
-				.filter((e) => e.flag)
-				.shift()
-			var res
-			if (specialTargetResolved) {
-				res = new HtbSpecialFlag(
-					specialTargetResolved.flag.idx,
-					specialTargetResolved.flag.name,
-					specialTargetResolved.parent
-				)
-			} else {
-				res = null
+		if (!name || /\s/.test(String(name))) return null
+
+		const normalizeFlagName = (flag, index) => {
+			if (typeof flag === "string") {
+				return { name: flag, idx: index + 1 }
 			}
-			return res
-		} else {
-			return null
+			const flagName = flag?.title || flag?.name || ""
+			if (!flagName) return null
+			return { name: flagName, idx: flag?.id ?? index + 1 }
 		}
+
+		const allSpecials = [
+			...this.vF,
+			...this.vE,
+			...this.vP,
+		]
+		if (!allSpecials.length && this.MISC.SPECIALS) {
+			allSpecials.push(...Object.values(this.MISC.SPECIALS).flat())
+		}
+
+		const needle = String(name).replace(/\W/g, "").toLowerCase()
+		var specialTargetResolved = allSpecials
+			.map((parent) => {
+				const flagList = Array.isArray(parent.flags)
+					? parent.flags
+					: Object.values(parent.flags || {})
+				const flag = flagList
+					.map(normalizeFlagName)
+					.filter(Boolean)
+					.find((entry) =>
+						entry.name.replace(/\W/g, "").toLowerCase() === needle
+					)
+				return flag ? { parent, flag } : null
+			})
+			.filter(Boolean)
+			.shift()
+
+		if (!specialTargetResolved) return null
+		return new HtbSpecialFlag(
+			specialTargetResolved.flag.idx,
+			specialTargetResolved.flag.name,
+			specialTargetResolved.parent
+		)
 	}
 
 	/**

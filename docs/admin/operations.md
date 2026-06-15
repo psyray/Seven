@@ -23,13 +23,27 @@ seven force update
 seven refresh team data
 ```
 
-**Effect:** Smart sync (`DAT.update({ force: true })`):
+**Effect:** Delta sync (`DAT.update({ force: true })`):
 
-- Refreshes team members
-- Fetches any missing dependencies (machines, challenges, specials)
+- Refreshes catalog deltas (machines, challenges, fortresses, endgames, pro labs) including stale entries
+- Re-fetches **all** team member profiles
 - Does **not** wipe existing cache or Postgres data
 
 **When to use:** After roster changes, new members join, or rankings feel stale.
+
+### Sync section (captain or admin)
+
+```
+seven sync machines
+seven sync fortresses
+seven sync endgames
+seven sync prolabs
+seven sync challenges
+seven sync specials
+seven sync all
+```
+
+**Effect:** Delta sync for the requested section(s) only — compares API catalog with cache and fetches missing/stale entries.
 
 ### Clear cache (admin only)
 
@@ -37,10 +51,10 @@ seven refresh team data
 seven clear cache
 ```
 
-**Effect:** Full refresh (`DAT.update({ full: true })`):
+**Effect:** Full bootstrap (`DAT.update({ full: true, bootstrap: true })`):
 
 - Clears in-memory cache
-- Re-fetches all five sections: machines → specials → tags → team → challenges
+- Delta-fetches all sections from HTB API (same code path as incremental sync, but from empty cache)
 - Persists to Postgres after sync
 - Does **not** wipe the Postgres volume — data is re-imported after refresh
 
@@ -121,19 +135,22 @@ Seven announces team owns (and global first blood) on `DISCORD_ANNOUNCE_CHAN_ID`
 
 - No live announces but bot online → run `seven pusher status`; check `HTB_V4_TOKEN` (Pusher auth uses the same Bearer token)
 - Missed events after outage → fallback poll catches up; captain runs `seven pusher history` and `seven pusher repost <id>` if needed
-- Target/member not resolved on repost → `seven force update` to refresh cache, then retry repost
+- Target/member not resolved on repost → Pusher auto-fetches missing targets via `ensureCachedTarget`; retry repost if needed
 - Collect raw payloads in staging → set `IS_DEV_INSTANCE=true` and inspect `LOG_DIR/PUSHER_MSG_LOG.json` (Docker volume `seven_logs`) or `cache/PUSHER_MSG_LOG.json` locally
 
 ## Sync behaviour (automatic)
 
 | Trigger | Mode | Description |
 |---------|------|-------------|
-| Startup | Partial | Only fetches sections missing from cache/DB |
-| Every hour | `{ force: true }` | Smart sync in background |
-| `force update` | `{ force: true }` | Manual smart sync |
-| `clear cache` | `{ full: true }` | Manual full refresh |
+| Startup | Partial bootstrap | Delta-fetch only sections missing from cache/DB (empty `{}` counts as missing) |
+| Every hour | `{ delta: true }` | Catalog deltas + stale refresh + new team members only |
+| `force update` | `{ force: true }` | Catalog deltas + stale + full team member refresh |
+| `seven sync <section>` | `{ sections: [...] }` | Delta sync for one section |
+| `clear cache` | `{ full: true, bootstrap: true }` | Wipe memory then delta bootstrap |
 
-Section order: `machines → specials → tags → team → challenges`
+Section order: `machines → fortresses → endgames → prolabs → tags → team → challenges`
+
+On-demand: Pusher and Discord entity lookup call `ensureCachedTarget()` before skipping.
 
 ## HTB token maintenance
 

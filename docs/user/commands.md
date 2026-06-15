@@ -37,7 +37,8 @@ Placeholders: `_boxname_`, `_challengename_`, `_username_` — replace with real
 ### Special content
 
 - Fortress, Endgame, Pro Lab names work the same way.
-- Ask for info on any cached special target by name.
+- Seven fetches missing targets from HTB on demand if not in cache.
+- Pro Labs include full scenarios (e.g. RastaLabs, Offshore) and shorter **mini** labs (e.g. FullHouse, Trusted).
 
 ### Newest content
 
@@ -123,6 +124,13 @@ For university deployments, replace "team" with "university" where applicable.
 - `incomplete challenges for _username_`
 - `boxes _username_ hasn't finished`
 
+### Catalog lists (fortresses, endgames, pro labs)
+
+- `list fortresses` / `list endgames` — first 15 entries, sorted by HTB id (ascending)
+- `list prolabs` / `list pro labs` — **all** pro labs in cache, sorted by id (ascending)
+- Each pro lab line is tagged **standard** (full scenario) or **mini** (short lab), from HTB `mini` flag
+- `list all machines` (and similar `list all …`) — no result cap
+
 ### Filter members
 
 - `who has the most roots?` / member rankings
@@ -156,7 +164,8 @@ See [privacy.md](privacy.md) for full details.
 
 Available to captains and admins:
 
-- `force update` / `refresh team data` — smart sync after roster changes
+- `force update` / `refresh team data` — delta catalog sync (incl. stale) + full team member refresh
+- `sync machines` / `sync challenges` / `sync fortresses` / `sync endgames` / `sync prolabs` / `sync specials` / `sync all` — delta sync for one section only
 
 ### HTB OAuth (when sync fails)
 
@@ -173,6 +182,7 @@ Not available to admins unless they are also in `CAPTAIN_DISCORD_IDS`:
 - `pusher history <member>` — filter by HTB username
 - `pusher repost last` — repost the latest stored own/flag to the announce channel
 - `pusher repost <id>` — repost a specific event (id from history embed)
+- Missing targets are fetched from HTB automatically before repost when possible
 
 See [notifications.md](notifications.md) for details.
 
@@ -184,7 +194,7 @@ Available to admins only:
 
 - `set htb tokens <access_jwt> <refresh>` — hot-reload OAuth pair without restart
 - `pusher status` — Pusher connection, announce queue, recent events
-- `clear cache` — wipe memory + full HTB refresh
+- `clear cache` — wipe memory + delta bootstrap from HTB API
 - `set status …` — Discord status/activity
 - `setup emoji` / `clear emoji` — HTB custom emoji on guild
 - `parrot on` / `parrot off` — mirror channel messages to admin DM (debug)

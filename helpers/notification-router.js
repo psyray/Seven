@@ -257,11 +257,14 @@ class NotificationRouter {
 
 		const member = await this.dat.resolveEnt(message.uid, "member", true, null, true)
 		const resolveType = message.type === "starting_point" ? "machine" : message.type
-		const targetEntity = this.dat.resolveEnt(message.target, resolveType)
+		let targetEntity = this.dat.resolveEnt(message.target, resolveType)
 		if (!member) {
 			log.warn("Own announce skipped — member not resolved", { uid: message.uid, target: message.target })
 			await this.recordEvent(message, "skipped: member not resolved")
 			return { ok: false, reason: "member_not_resolved" }
+		}
+		if (!targetEntity) {
+			targetEntity = await this.dat.ensureCachedTarget(resolveType, message.target, { trigger: "pusher" })
 		}
 		if (!targetEntity) {
 			log.warn("Own announce skipped — target not in cache", {
@@ -348,6 +351,9 @@ class NotificationRouter {
 		if (message.target && this.launchDebounce.has(message.target)) {
 			log.debug("Debounced duplicate launch notification", { target: message.target })
 			return
+		}
+		if (message.target && !this.dat.getMachineByName(message.target)) {
+			await this.dat.ensureCachedTarget("machine", message.target, { trigger: "pusher-launch" })
 		}
 		if (message.target) this.launchDebounce.add(message.target)
 		await this.sendAnnouncement({ embed: this.embeds.pusherNotif(message) })

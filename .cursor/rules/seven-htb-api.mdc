@@ -34,17 +34,19 @@ Pusher fallback: `getRecentMemberActivities(memberIds, sinceMs)` — per-member 
 
 ```javascript
 // Section order (never reorder without updating logs)
-["machines", "specials", "tags", "team", "challenges"]
+["machines", "fortresses", "endgames", "prolabs", "tags", "team", "challenges"]
 
-// Options
-update()              // missing sections only
-update({ force: true }) // team + missing deps
-update({ full: true })  // everything
-update({ sections: ["machines"] }) // explicit
+// Options — see helpers/htb-sync-engine.js (HtbSyncEngine.runPlan)
+update()              // missing sections only (partial bootstrap)
+update({ delta: true }) // hourly: catalog deltas + stale + new team members
+update({ force: true }) // delta catalogs + full team refresh
+update({ full: true, bootstrap: true }) // admin clear cache
+update({ sections: ["machines"] }) // explicit section delta
 ```
 
-- `force` ≠ `full`: force refreshes team members, not all machines/challenges
-- `getMemberSyncDependencies()` auto-adds machines/challenges/specials if missing
+- `force` ≠ `full`: force delta-syncs catalogs + refreshes all team members; full bootstraps from empty cache
+- `getMemberSyncDependencies()` auto-adds machines/challenges/fortresses/endgames/prolabs if missing
+- On-demand: `ensureCachedTarget()` / `resolveEntWithEnsure()` — never full-section sync for Pusher
 - Specials stored in `MISC.FORTRESSES`, `MISC.ENDGAMES`, `MISC.PROLABS`
 - After update: `syncDbExportFields()` + `updateCache()` in bot.js
 

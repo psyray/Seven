@@ -9,6 +9,7 @@
 | `HTB_TOKEN_FILE` | No | JSON path — **loaded first** on startup; updated after each refresh |
 | `HTB_ENV_FILE` | No | `.env` path synced after refresh via `helpers/env-tokens.js` |
 | `HTB_TOKEN_EXPIRY_WARN_DAYS` | No | Days before access expiry to alert (default 1) |
+| `HTB_TEAM_STATS_REFRESH_MS` | No | Team stats re-fetch interval in delta mode (default 3600000) |
 | `HTB_API_BASE` | No | v4 base URL (default labs.hackthebox.com/api/v4) |
 | `HTB_API_V5_BASE` | No | v5 base URL (machine list) |
 | `HTB_APP_BASE` | No | App URLs for profiles/badges/Pusher auth |
@@ -20,6 +21,20 @@
 | `HTB_API_LOG_REQUESTS` | No | Verbose API logging |
 | `HTB_RATE_LIMIT_WAIT_THRESHOLD_MS` | No | Min wait before logging (default 3000) |
 | `HTB_RATE_LIMIT_LOG_EVERY_MS` | No | Heartbeat during waits (default 15000) |
+
+## Sync modes (`HtbSyncEngine.runPlan`)
+
+| Option | Behavior |
+|--------|----------|
+| `{}` | Boot — missing sections only (`{}` = missing) |
+| `{ delta: true }` | Hourly — catalog deltas + stale + new team members |
+| `{ force: true }` | `force update` — catalog deltas + full team refresh |
+| `{ full: true, bootstrap: true }` | `clear cache` — delta from empty memory |
+| `{ sections: ["machines"] }` | `seven sync machines` etc. |
+
+Section order: `machines → fortresses → endgames → prolabs → tags → team → challenges`
+
+On-demand: `ensureTarget()` — Pusher + `resolveEntWithEnsure`; never full-section sync.
 
 ## Auth flow
 
@@ -34,12 +49,12 @@
 | Data | API version | Notes |
 |------|-------------|-------|
 | Machine list | v5 | Paginated, `machines?...` |
-| Machine profiles | v4 | Selective enrichment for retired/owned |
+| Machine profiles | v4 | Selective enrichment for retired/owned; on-demand via `machine/profile/{name}` |
 | Member activity (Pusher fallback) | v4 | `user/profile/activity/{id}` — **not** `team/activity` (401 on OAuth) |
-| Challenges | v4 | |
-| Team/members | v4 | |
-| Fortresses/endgames/prolabs | v4 | Stored in `MISC.*` |
-| Starting point machines | v4 | Merged into `MACHINES` |
+| Challenges | v4 | List + per-id `challenge/info/{id}` |
+| Team/members | v4 | Delta: new members only in hourly sync |
+| Fortresses/endgames/prolabs | v4 | List + per-id complete fetchers in `htb-api.js` | Pro labs: `GET prolabs` → `data.labs`; entries may be `mini: true` |
+| Starting point machines | v4 | Merged into `MACHINES` on first machine sync |
 
 ## Cache shape
 
@@ -50,7 +65,7 @@ DAT.TEAM_MEMBERS      // { [id]: TeamMember }
 DAT.TEAM_STATS        // Team object
 DAT.MISC.FORTRESSES   // { [id]: Fortress }
 DAT.MISC.ENDGAMES     // { [id]: Endgame }
-DAT.MISC.PROLABS      // { [id]: ProLab }
+DAT.MISC.PROLABS      // { [id]: ProLab } — includes `mini` flag (standard vs mini lab)
 DAT.MISC.MACHINE_TAGS // tag categories
 DAT.DISCORD_LINKS     // Discord ↔ HTB associations
 ```
@@ -69,3 +84,4 @@ DAT.DISCORD_LINKS     // Discord ↔ HTB associations
 - Password-based token refresh / Turnstile login in bot
 - `HTB_LEGACY_*`, `HTB_AUTH_*`, `HTB_SERVICE_*`
 - `.env_sample` template (use `.env.docker.example`)
+- Monolithic full-catalog re-fetch on every `force update` (replaced by delta sync)

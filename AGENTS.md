@@ -63,16 +63,19 @@ static/
 - v4 base: `https://labs.hackthebox.com/api/v4` (profiles, team, challenges, …)
 - v5 base: `https://labs.hackthebox.com/api/v5` (machine list pagination)
 
-## Sync modes (`SevenDatastore.update`)
+## Sync modes (`SevenDatastore.update` → `HtbSyncEngine.runPlan`)
 
 | Option | Behavior |
 |--------|----------|
-| default | Only sections missing from cache/DB |
-| `{ force: true }` | Team members + any missing deps (machines/challenges/specials) |
-| `{ full: true }` | All 5 sections (admin clear cache) |
-| `{ sections: ["team"] }` | Explicit section list, expanded with deps |
+| default | Only sections missing from cache/DB (empty `{}` = missing) |
+| `{ delta: true }` | Catalog deltas + stale + new team members (hourly) |
+| `{ force: true }` | Catalog deltas + stale + full team member refresh |
+| `{ full: true, bootstrap: true }` | Bootstrap all sections via delta (admin clear cache) |
+| `{ sections: ["machines"] }` | Delta explicit section(s); `specials` expands to fortresses/endgames/prolabs |
 
-Section order: `machines → specials → tags → team → challenges`
+Section order: `machines → fortresses → endgames → prolabs → tags → team → challenges`
+
+On-demand: `ensureCachedTarget()` / `resolveEntWithEnsure()` for Pusher and Discord lookups.
 
 ## Environment
 
@@ -101,12 +104,14 @@ Use `createLogger("module-name")` from `helpers/logger.js`. Logs go to console +
 
 ## Key admin commands (DialogFlow intents)
 
-- `admin.forceUpdateData` → smart team sync (`force: true`)
+- `admin.forceUpdateData` → delta catalog sync + full team refresh (`force: true`)
+- `admin.syncSection` → section delta (`seven sync machines`, etc.)
 - `admin.clearCached` → wipe memory + full refresh (`full: true`)
 - `admin.pusherStatus` → Pusher connection, announce queue, recent in-memory events
 - `admin.setHtbTokens` → hot-reload OAuth pair (`seven set htb tokens …`)
 - `captain.pusherHistory` / `captain.pusherRepost` → persisted notification log + forced announce repost (captain only)
 - `getTeamInfo`, `getMemberRank`, `getTargetInfo`, … → see `bot.js` switch and [docs/developer/intents.md](docs/developer/intents.md)
+- `list prolabs` (local NLP) → all pro labs, id ascending, `standard` / `mini` labels in embed
 
 ## References
 

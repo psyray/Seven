@@ -22,6 +22,7 @@ npm run docker:logs
 Expected startup logs:
 - `[DB IMPORT]::: Restored from DB backup.`
 - `[datastore] HTB data update started (partial bootstrap …)` or `skipped (cache complete)`
+- `[htb-sync] Catalog delta fetching` / `Catalog delta up to date` during sync
 - `[DISCORD]::: CLIENT READY`
 
 On first boot after upgrade, `NotificationStore.ensureSchema()` creates `seven_notification_events` in the same Postgres DB (persists Pusher/fallback history for captain `seven pusher history` / `repost`).
@@ -84,7 +85,8 @@ NODE_ENV=development node bot.js  # loads ./config/.env
 
 ## Troubleshooting startup hang
 
-1. Check `[htb-api]` rate-limit wait logs — sync may be slow, not stuck
-2. Step `[4/5] Fetching team` can take minutes for large teams
-3. Increase log verbosity: `LOG_LEVEL=debug` in `.env`
-4. Token issues: look for `Non-JSON HTML response` in `sevenbot-error.log`
+1. Check `[htb-api]` / `[htb-sync]` rate-limit wait logs — sync may be slow, not stuck
+2. Delta sync fetches only missing/stale catalog IDs — large first bootstrap is normal
+3. Team section can take minutes for large rosters on `force update` (full member refresh)
+4. Increase log verbosity: `LOG_LEVEL=debug` in `.env`
+5. Token issues: look for `Non-JSON HTML response` in `sevenbot-error.log`
