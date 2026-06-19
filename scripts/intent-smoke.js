@@ -154,7 +154,7 @@ async function testLiveDialogFlow() {
 	console.log("\n[4] Live DialogFlow — help examples")
 	const dialogflow = require("@google-cloud/dialogflow").v2beta1
 	const { struct } = require("pb-util")
-	require("dotenv").config({ path: process.env.NODE_ENV === "development" ? "./config/.env" : ".env" })
+	require("dotenv").config({ path: ".env" })
 	const dflow = new dialogflow.SessionsClient({
 		credentials: JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS || "{}"),
 	})

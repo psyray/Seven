@@ -11,11 +11,10 @@ console.log("%c╔════════════════════�
 F.logRainbow()
 if (process.env.NODE_ENV != "development") {
 	console.log("Started at " + new Date().toLocaleTimeString() + " in production. Using prod env vars")
-    require("dotenv").config({ path: ".env" })
 } else {
-	console.log("Started at " + new Date().toLocaleTimeString() + " on dev machine. Scanning ./config/env for vars")
-	require("dotenv").config({ path: "./config/.env" })
+	console.log("Started at " + new Date().toLocaleTimeString() + " on dev machine. Loading .env")
 }
+require("dotenv").config({ path: ".env" })
 
 /*** IMPORT STUFF ***/
 
@@ -396,7 +395,7 @@ function buildHtbAuthFailureAlert(error) {
 		"",
 		formatHtbAuthError(error),
 		"",
-		"Re-login on labs.hackthebox.com, capture a fresh token pair (DevTools → login/refresh), then run `seven htb token set <access> <refresh>` in DM (or update `config/docker/seven.env` on Docker). Each refresh invalidates the previous token.",
+		"Re-login on labs.hackthebox.com, capture a fresh token pair (DevTools → login/refresh), then run `seven htb token set <access> <refresh>` in DM (or update `.env`). Each refresh invalidates the previous token.",
 		"The bot stays online with cached data until tokens are fixed.",
 	].join("\n")
 }

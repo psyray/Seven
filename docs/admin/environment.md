@@ -55,7 +55,7 @@ Notification events are stored automatically in Postgres table `seven_notificati
 | `HTB_V4_TOKEN` | Yes | — | OAuth access token (JWT) from browser login |
 | `HTB_REFRESH_TOKEN` | Yes | — | OAuth refresh token (`def50200...`) |
 | `HTB_TOKEN_FILE` | No | — | JSON file path for persistence and hot-reload (loaded first on startup) |
-| `HTB_ENV_FILE` | No | — | Env file path updated after each OAuth refresh (Docker: host `config/docker/seven.env` → container `/config/seven.env`) |
+| `HTB_ENV_FILE` | No | — | `.env` path updated after each OAuth refresh (Docker Compose: `./.env` mounted at `/config/seven.env`) |
 | `HTB_TOKEN_EXPIRY_WARN_DAYS` | No | `1` | Alert admins this many days before access expiry |
 | `HTB_API_BASE` | No | `https://labs.hackthebox.com/api/v4` | v4 API base URL |
 | `HTB_API_V5_BASE` | No | `https://labs.hackthebox.com/api/v5` | v5 API base (machine lists) |
@@ -125,7 +125,7 @@ Optional overrides:
 | Variable | Description |
 |----------|-------------|
 | `IS_DEV_INSTANCE` | `true` — bot responds only to admins |
-| `NODE_ENV` | `development` loads `config/.env`; `production` in Docker |
+| `NODE_ENV` | `development` or `production`; env vars from root `.env` (Compose injects vars in Docker) |
 | `SMOKE_TRACE` | `1` — log smoke test messages in bot |
 | `SMOKE_LIVE_DF` | `1` — call live Dialogflow in intent-smoke |
 | `SMOKE_DISCORD_TOKEN` | User token for E2E help audit |

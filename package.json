@@ -6,8 +6,7 @@
 	"scripts": {
 		"start": "node bot.js",
 		"docker:build": "docker compose build",
-		"docker:prepare": "node scripts/docker-prepare.js",
-		"docker:up": "npm run docker:prepare && docker compose up -d",
+		"docker:up": "docker compose up -d",
 		"docker:down": "docker compose down",
 		"docker:reset-db": "docker compose down -v",
 		"docker:logs": "docker compose logs -f seven",

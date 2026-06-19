@@ -52,11 +52,10 @@ console.log("%c╔════════════════════�
 F.logRainbow()
 if (process.env.NODE_ENV != "development") {
 	console.log("Started at " + new Date().toLocaleTimeString() + " in production. Using prod env vars")
-    require("dotenv").config({ path: ".env" })
 } else {
-	console.log("Started at " + new Date().toLocaleTimeString() + " on dev machine. Scanning ./config/env for vars")
-	require("dotenv").config({ path: "./config/.env" })
+	console.log("Started at " + new Date().toLocaleTimeString() + " on dev machine. Loading .env")
 }
+require("dotenv").config({ path: ".env" })
 
 /*** IMPORT STUFF ***/
 

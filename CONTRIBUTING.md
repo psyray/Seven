@@ -37,7 +37,7 @@ Expected startup logs:
 
 ```bash
 # Postgres via DATABASE_URL or PGHOST/PGUSER/PGPASSWORD
-cp static/templates/.env.docker.example config/.env
+cp static/templates/.env.docker.example .env
 NODE_ENV=development node bot.js
 ```
 

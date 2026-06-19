@@ -5,7 +5,7 @@
 */
 
 if (!process.env.HEROKU) {
-	require("dotenv").config({ path: "../config/.env" })
+	require("dotenv").config({ path: "../.env" })
 }
 
 var proxy = require("express-http-proxy")

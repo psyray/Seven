@@ -80,7 +80,7 @@ Copy `docker-compose.override.yml.example` → `docker-compose.override.yml`:
 
 ```bash
 # Use DATABASE_URL or PGHOST for Postgres
-NODE_ENV=development node bot.js  # loads ./config/.env
+NODE_ENV=development node bot.js  # loads ./.env
 ```
 
 ## Troubleshooting startup hang

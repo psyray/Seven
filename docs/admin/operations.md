@@ -100,7 +100,7 @@ seven htb token set eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... def50200...
 - **refresh** — renew access using the refresh token already in memory
 - **set &lt;access_jwt&gt; &lt;refresh&gt;** — hot-reload full pair without restart (recommended)
 
-Persists to `HTB_TOKEN_FILE` and syncs `HTB_ENV_FILE` when configured (Docker: host `config/docker/seven.env`). Legacy alias: `set htb tokens <access> <refresh>` (pair only).
+Persists to `HTB_TOKEN_FILE` and syncs `HTB_ENV_FILE` when configured (Docker: `./.env`). Legacy alias: `set htb tokens <access> <refresh>` (pair only).
 
 ### Pusher status (admin)
 
@@ -162,17 +162,17 @@ On-demand: Pusher and Discord entity lookup call `ensureCachedTarget()` before s
 
 ## HTB token maintenance
 
-Seven uses OAuth access/refresh tokens. The access token (~72h) is renewed automatically before expiry. HTB rotates the refresh token on each refresh — Seven persists the new pair to `HTB_TOKEN_FILE` and, when configured, syncs `HTB_V4_TOKEN` / `HTB_REFRESH_TOKEN` back into `HTB_ENV_FILE` (Docker: host `config/docker/seven.env`, container `/config/seven.env`).
+Seven uses OAuth access/refresh tokens. The access token (~72h) is renewed automatically before expiry. HTB rotates the refresh token on each refresh — Seven persists the new pair to `HTB_TOKEN_FILE` and, when configured, syncs `HTB_V4_TOKEN` / `HTB_REFRESH_TOKEN` back into `.env` via `HTB_ENV_FILE` (Docker Compose mounts `./.env` at `/config/seven.env`).
 
 When refresh fails (`HTB_REFRESH_TOKEN invalid`):
 
 1. Re-login on [labs.hackthebox.com](https://labs.hackthebox.com) in a browser
 2. Capture a **new** pair from DevTools → Network → `login/refresh` (same response for both tokens)
-3. Update `config/docker/seven.env` (Docker) or `.env` (local), **or** run in Discord (admin DM):
+3. Update `.env`, **or** run in Discord (admin DM):
    - `seven htb token set <access> <refresh>` — full pair (recommended)
    - `seven htb token set <refresh>` — if you only have a valid refresh token
    - `seven htb token refresh` — renew using stored refresh (when still valid)
-4. Restart only if you edited env files manually without a running bot sync: `npm run docker:restart`
+4. Restart only if you edited `.env` manually without a running bot sync: `npm run docker:restart`
 
 Proactive warnings are sent to `DISCORD_ANNOUNCE_CHAN_ID` when access expiry is within `HTB_TOKEN_EXPIRY_WARN_DAYS` (default 1).
 
@@ -182,7 +182,6 @@ Symptoms: `HTB_REFRESH_TOKEN invalid` or `Non-JSON HTML response` in `sevenbot-e
 
 | Task | Command |
 |------|---------|
-| Seed Docker env file | `npm run docker:prepare` (also runs before `docker:up`) |
 | View logs | `npm run docker:logs` |
 | Restart bot | `npm run docker:restart` |
 | Rebuild after code update | `npm run docker:build && npm run docker:restart` |

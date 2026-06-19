@@ -206,7 +206,7 @@ Available to admins only (use **DM** for token commands — refresh tokens are l
 
 **Token capture:** DevTools → Network → `login/refresh` on [labs.hackthebox.com](https://labs.hackthebox.com) → copy `message.access_token` + `message.refresh_token` from the **same** response. HTB rotates the refresh token on every use — capture a new pair after browser login; do not reuse a token you already pasted elsewhere.
 
-**Docker persistence:** after each successful refresh, Seven updates `HTB_TOKEN_FILE` (volume `seven_logs`) and syncs `HTB_V4_TOKEN` / `HTB_REFRESH_TOKEN` into `config/docker/seven.env` on the host (`npm run docker:prepare` seeds this file from `.env` on first `docker:up`).
+**Docker persistence:** after each successful refresh, Seven updates `HTB_TOKEN_FILE` (volume `seven_logs`) and syncs `HTB_V4_TOKEN` / `HTB_REFRESH_TOKEN` back into root `.env` (Compose bind-mount at `/config/seven.env`).
 
 See [admin/operations.md](../admin/operations.md) for what these do under the hood.
 

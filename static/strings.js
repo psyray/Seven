@@ -275,7 +275,7 @@ function sectionAdmin() {
 - ║   "htb token set <access_jwt> <refresh>" — full pair (recommended)
 - ║   labs.hackthebox.com → DevTools → Network → login/refresh
 - ║   Use a fresh token from that response; each refresh invalidates the old one
-- ║   Docker: OAuth sync writes host config/docker/seven.env after success
+- ║   Docker: OAuth sync writes root .env after success (HTB_ENV_FILE mount)
 - ║   Legacy: "set htb tokens <access> <refresh>"
 # ║ Cache & sync
 - ║   "clear cache" — wipe memory + delta bootstrap from HTB

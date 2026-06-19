@@ -93,7 +93,7 @@ Helper methods:
 | `HTB_V4_TOKEN` | Yes | — | OAuth access token (JWT) |
 | `HTB_REFRESH_TOKEN` | Yes | — | OAuth refresh token |
 | `HTB_TOKEN_FILE` | No | — | JSON file for token persistence and hot-reload (startup priority) |
-| `HTB_ENV_FILE` | No | — | Env file synced after each refresh (Docker: host `config/docker/seven.env`) |
+| `HTB_ENV_FILE` | No | — | `.env` path synced after each refresh (Docker: `./.env` → `/config/seven.env`) |
 | `HTB_TOKEN_EXPIRY_WARN_DAYS` | No | 1 | Days before access expiry to alert admins |
 | `HTB_TEAM_ID` | Yes* | — | Team ID |
 | `HTB_UNIVERSITY_ID` | Alt* | — | University instead of team |
