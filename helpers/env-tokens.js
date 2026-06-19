@@ -1,4 +1,5 @@
 const fs = require("fs")
+const os = require("os")
 const path = require("path")
 const { createLogger } = require("./logger.js")
 
@@ -33,9 +34,18 @@ function updateEnvFileOAuthTokens(envFilePath, accessToken, refreshToken) {
 		content = setEnvLine(content, "HTB_V4_TOKEN", accessToken)
 		content = setEnvLine(content, "HTB_REFRESH_TOKEN", refreshToken)
 
-		const tmpPath = `${absPath}.tmp.${process.pid}`
+		const tmpDir = (process.env.HTB_ENV_TMP_DIR || os.tmpdir()).trim()
+		const tmpPath = path.join(tmpDir, `htb-env-sync-${path.basename(absPath)}.${process.pid}.tmp`)
 		fs.writeFileSync(tmpPath, content, { mode: 0o600 })
-		fs.renameSync(tmpPath, absPath)
+		try {
+			fs.copyFileSync(tmpPath, absPath)
+		} finally {
+			try {
+				fs.unlinkSync(tmpPath)
+			} catch (_) {
+				// ignore stale tmp cleanup failures
+			}
+		}
 		log.info("OAuth tokens synced to .env", { path: absPath })
 		return true
 	} catch (error) {

@@ -46,7 +46,7 @@ Logger modules: `[bot]`, `[datastore]`, `[htb-sync]`, `[htb-api]`, `[pusher-htb]
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| `Non-JSON HTML response` | Expired/invalid OAuth token | Re-login; `seven set htb tokens` or update `HTB_TOKEN_FILE` + `HTB_ENV_FILE` |
+| `Non-JSON HTML response` | Expired/invalid OAuth token | Re-login; `seven htb token set <refresh>` or update `HTB_TOKEN_FILE` + `HTB_ENV_FILE` |
 | `No live own announces` | Pusher silent or bad Bearer token | `seven pusher status`; fallback poll should still catch owns — check logs |
 | `embed.description required` | Empty embed path | Add `.setDescription()` in embeds.js |
 | `Object.values` on null | Uninitialized cache | Guard with `\|\| {}` in resolveEnt |
@@ -54,7 +54,7 @@ Logger modules: `[bot]`, `[datastore]`, `[htb-sync]`, `[htb-api]`, `[pusher-htb]
 | DialogFlow entity error | Malformed flag data | Fix `extractSpecialTargetFlagNames()` |
 | `password authentication failed` | Postgres volume password | See seven-docker-ops skill |
 | 0 machines after clear cache | Token or API base wrong | Verify `HTB_API_BASE` and token |
-| Token refresh fails on 2nd boot | Stale `.env` refresh vs `HTB_TOKEN_FILE` | Set both `HTB_TOKEN_FILE` + `HTB_ENV_FILE`; or `seven set htb tokens` |
+| Token refresh fails on 2nd boot | Stale `.env` refresh vs `HTB_TOKEN_FILE` | Set both `HTB_TOKEN_FILE` + `HTB_ENV_FILE`; or `seven htb token set` |
 | Owns missed at boot | Channel not ready yet | Should queue — verify `DISCORD_ANNOUNCE_CHAN_ID`; captain `seven pusher repost last` |
 | Own in history but not in channel | Pusher silent or send failed | Captain: `seven pusher history` → note column; `seven pusher repost <id>` |
 | Fortresses/Endgames/Pro Labs = 0 after boot | Empty `{}` in DB treated as missing — should delta-fetch on boot; check `[htb-sync]` logs | `seven sync fortresses` or `seven sync all`; verify HTB token |

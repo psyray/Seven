@@ -404,13 +404,13 @@ class SevenDatastore {
 				targets = this.vC
 				break
 			case "endgame":
-				targets = this.vE
+				targets = this.vE.map((entry) => this.normalizeLabTarget(entry, "endgame"))
 				break
 			case "fortress":
-				targets = this.vF
+				targets = this.vF.map((entry) => this.normalizeLabTarget(entry, "fortress"))
 				break
 			case "prolab":
-				targets = this.vP
+				targets = this.vP.map((entry) => this.normalizeLabTarget(entry, "prolab"))
 				break
 			default:
 				break
@@ -966,6 +966,49 @@ class SevenDatastore {
 		)
 	}
 
+	normalizeLabTarget(target, labType) {
+		if (!target || typeof target !== "object") return target
+		return target.type ? target : { ...target, type: labType }
+	}
+
+	getMemberLabProgressList(member, labType) {
+		const key = { fortress: "fortresses", endgame: "endgames", prolab: "prolabs" }[labType]
+		return key && Array.isArray(member?.[key]) ? member[key] : []
+	}
+
+	getMemberLabProgressEntry(member, target) {
+		if (!member || !target) return null
+		const labType = target.type
+		if (!["fortress", "endgame", "prolab"].includes(labType)) return null
+
+		const list = this.getMemberLabProgressList(member, labType)
+		const aliases = [target.name, target.identifier, target.company?.name].filter(Boolean)
+
+		return list.find((entry) => {
+			if (target.id != null) {
+				if (entry.id != null && String(entry.id) === String(target.id)) return true
+				if (entry.lab_id != null && String(entry.lab_id) === String(target.id)) return true
+			}
+			return aliases.some((alias) => H.ciEquals(entry.name, alias))
+		}) || null
+	}
+
+	memberHasLabProgress(member, target) {
+		const progress = this.getMemberLabProgressEntry(member, target)
+		return Boolean(progress && Number(progress.completion_percentage) > 0)
+	}
+
+	buildLabProgressOwns(member, target, progressEntry) {
+		return [{
+			object_type: target.type,
+			type: target.type,
+			name: target.name,
+			completion_percentage: progressEntry.completion_percentage,
+			date: progressEntry.last_owned_at || progressEntry.updated_at || progressEntry.date || null,
+			target_id: target.id,
+		}].map((own) => ({ ...own, id: member.id }))
+	}
+
 	getMemberOwnsForTarget(member, target) {
 		if (member && target) {
 			// console.log(member)
@@ -983,14 +1026,23 @@ class SevenDatastore {
 					break
 				case "endgame":
 				case "fortress":
+				case "prolab": {
+					const progressEntry = this.getMemberLabProgressEntry(member, target)
+					if (progressEntry && Number(progressEntry.completion_percentage) > 0) {
+						validOwns = this.buildLabProgressOwns(member, target, progressEntry)
+						break
+					}
 					validOwns = member.activity
 						.filter(
 							(own) =>
 								own.object_type == target.type &&
-								(H.ciEquals(own.name, target.name) || H.ciEquals(own.name, target.company.name))
+								(H.ciEquals(own.name, target.name) ||
+									H.ciEquals(own.name, target.company?.name) ||
+									(target.id != null && own.id == target.id))
 						)
 						.map((own) => ({ ...own, id: member.id }))
 					break
+				}
 				case "flag":
 					validOwns = member.activity
 						.filter(
@@ -1001,15 +1053,6 @@ class SevenDatastore {
 						)
 						.filter(
 							(own) => target.name.toLowerCase() == own.flag_title.toLowerCase()
-						)
-						.map((own) => ({ ...own, id: member.id }))
-					break
-				case "prolab":
-					validOwns = member.activity
-						.filter(
-							(own) =>
-								own.object_type == target.type &&
-								(H.ciEquals(own.name, target.name) || H.ciEquals(own.name, target.company?.name))
 						)
 						.map((own) => ({ ...own, id: member.id }))
 					break

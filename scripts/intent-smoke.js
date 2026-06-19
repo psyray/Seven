@@ -62,6 +62,22 @@ function testLocalIntentRegressions() {
 			prompt: "who is number 1 on the team",
 			expect: { intent: "getTeamLeader" },
 		},
+		{
+			prompt: "htb token set eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.AaBbCc def50200refresh",
+			expect: { intent: "admin.htbTokenSet" },
+		},
+		{
+			prompt: "htb token set def50200refreshonly",
+			expect: { intent: "admin.htbTokenSet" },
+		},
+		{
+			prompt: "htb token refresh",
+			expect: { intent: "admin.htbTokenRefresh" },
+		},
+		{
+			prompt: "htb token status",
+			expect: { intent: "admin.htbTokenStatus" },
+		},
 	]
 
 	for (const c of cases) {

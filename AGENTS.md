@@ -58,7 +58,7 @@ static/
 - Auth: `HTB_V4_TOKEN` (OAuth access JWT) + `HTB_REFRESH_TOKEN` (refresh) — **no v3 session, no password login, no static App Token**
 - Refresh: `POST labs.hackthebox.com/api/v4/login/refresh` — automatic before access expiry; HTB rotates refresh token each time
 - Persistence: `HTB_TOKEN_FILE` JSON (loaded first) + optional `HTB_ENV_FILE` (`.env` sync via `helpers/env-tokens.js`)
-- Hot-reload: `seven set htb tokens <access> <refresh>` or watch `HTB_TOKEN_FILE`
+- Hot-reload: `seven htb token set <refresh>` or `seven htb token set <access> <refresh>`; watch `HTB_TOKEN_FILE`
 - Auth failure: captains notified by Discord DM; bot continues with cached data
 - v4 base: `https://labs.hackthebox.com/api/v4` (profiles, team, challenges, …)
 - v5 base: `https://labs.hackthebox.com/api/v5` (machine list pagination)
@@ -108,7 +108,8 @@ Use `createLogger("module-name")` from `helpers/logger.js`. Logs go to console +
 - `admin.syncSection` → section delta (`seven sync machines`, etc.)
 - `admin.clearCached` → wipe memory + full refresh (`full: true`)
 - `admin.pusherStatus` → Pusher connection, announce queue, recent in-memory events
-- `admin.setHtbTokens` → hot-reload OAuth pair (`seven set htb tokens …`)
+- `admin.htbTokenSet` → OAuth refresh or full pair (`seven htb token set …`)
+- `admin.htbTokenStatus` → OAuth access expiry + persistence (`seven htb token status`)
 - `captain.pusherHistory` / `captain.pusherRepost` → persisted notification log + forced announce repost (captain only)
 - `getTeamInfo`, `getMemberRank`, `getTargetInfo`, … → see `bot.js` switch and [docs/developer/intents.md](docs/developer/intents.md)
 - `list prolabs` (local NLP) → all pro labs, id ascending, `standard` / `mini` labels in embed

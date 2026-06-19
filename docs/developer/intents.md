@@ -39,7 +39,8 @@ Dialogflow intents map to handlers in the `switch` block of `bot.js`. Parameters
 | `admin.forceUpdateData` | Captain or admin | `forceUpdate()` → `refresh({ force: true })` |
 | `admin.syncSection` | Captain or admin | `admin_syncSection()` → `refresh({ sections: [...] })` |
 | `admin.clearCached` | Admin | `admin_clearCached()` → `refresh({ full: true, bootstrap: true })` |
-| `admin.setHtbTokens` | Admin | `admin_setHtbTokens()` — hot-reload OAuth pair + persistence |
+| `admin.htbTokenSet` | Admin | `admin_htbTokenSet()` — refresh-only or full pair + persistence |
+| `admin.htbTokenStatus` | Admin | `admin_htbTokenStatus()` → `EGI.htbTokenStatus()` |
 | `admin.pusherStatus` | Admin | `NOTIFICATION_ROUTER.getStatusEmbed()` |
 | `captain.pusherHistory` | Captain | `NOTIFICATION_ROUTER.getHistoryEmbed()` → `EGI.pusherHistory()` |
 | `captain.pusherRepost` | Captain | `NOTIFICATION_ROUTER.repostToChannel()` → `handleOwnEvent({ forceRepost: true })` |
@@ -68,7 +69,11 @@ Captain/admin commands (no Dialogflow intent required):
 | Phrase | Local intent |
 |--------|--------------|
 | `pusher status` | `admin.pusherStatus` |
-| `set htb tokens <access> <refresh>` | `admin.setHtbTokens` |
+| `htb token status` / `token status` | `admin.htbTokenStatus` |
+| `htb token set <refresh>` | `admin.htbTokenSet` (mode `refresh`) |
+| `htb token refresh` | `admin.htbTokenRefresh` (stored refresh) |
+| `htb token set <access> <refresh>` | `admin.htbTokenSet` (mode `pair`) |
+| `set htb tokens <access> <refresh>` | `admin.htbTokenSet` (legacy alias, pair only) |
 | `sync machines` / `sync fortresses` / `sync all` / … | `admin.syncSection` |
 | `list prolabs` / `list pro labs` / `list fortresses` / `list endgames` / `list all …` | `filterTargets` (catalog list; pro labs = all entries, id asc, mini/standard labels) |
 | `pusher history` / `pusher history <member>` | `captain.pusherHistory` |

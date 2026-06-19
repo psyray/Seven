@@ -171,7 +171,8 @@ Available to captains and admins:
 
 - Seven uses OAuth access + refresh tokens (~72h cycle); access renews automatically.
 - If refresh fails, **captains receive a DM** with fix instructions.
-- Re-login on [labs.hackthebox.com](https://labs.hackthebox.com) → DevTools → Network → `login/refresh` → update tokens (see Admin).
+- Re-login on [labs.hackthebox.com](https://labs.hackthebox.com) → DevTools → Network → `login/refresh` → capture a **fresh** token pair (see Admin).
+- HTB invalidates each refresh token after use — never reuse an old paste.
 - The bot stays online with cached data until tokens are fixed.
 
 ### Notification history & repost (captain only)
@@ -190,16 +191,22 @@ See [notifications.md](notifications.md) for details.
 
 ## Admin commands
 
-Available to admins only:
+Available to admins only (use **DM** for token commands — refresh tokens are long):
 
-- `set htb tokens <access_jwt> <refresh>` — hot-reload OAuth pair without restart
+- `htb token status` — OAuth access expiry, refresh token presence, persistence paths
+- `htb token set <refresh>` — store refresh token and renew access via HTB OAuth refresh (paste the full token once; ~700+ characters)
+- `htb token refresh` — renew access using the refresh token already in memory
+- `htb token set <access_jwt> <refresh>` — hot-reload full OAuth pair without restart (recommended; one line or two lines)
+- Legacy alias: `set htb tokens <access_jwt> <refresh>` (pair only)
 - `pusher status` — Pusher connection, announce queue, recent events
 - `clear cache` — wipe memory + delta bootstrap from HTB API
 - `set status …` — Discord status/activity
 - `setup emoji` / `clear emoji` — HTB custom emoji on guild
 - `parrot on` / `parrot off` — mirror channel messages to admin DM (debug)
 
-Token pair: capture `message.access_token` + `message.refresh_token` from the browser `login/refresh` response. Optional Docker persistence: `HTB_TOKEN_FILE` JSON (updated after each refresh).
+**Token capture:** DevTools → Network → `login/refresh` on [labs.hackthebox.com](https://labs.hackthebox.com) → copy `message.access_token` + `message.refresh_token` from the **same** response. HTB rotates the refresh token on every use — capture a new pair after browser login; do not reuse a token you already pasted elsewhere.
+
+**Docker persistence:** after each successful refresh, Seven updates `HTB_TOKEN_FILE` (volume `seven_logs`) and syncs `HTB_V4_TOKEN` / `HTB_REFRESH_TOKEN` into `config/docker/seven.env` on the host (`npm run docker:prepare` seeds this file from `.env` on first `docker:up`).
 
 See [admin/operations.md](../admin/operations.md) for what these do under the hood.
 

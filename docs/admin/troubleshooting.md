@@ -52,12 +52,15 @@ Common causes:
 
 1. Log in on [labs.hackthebox.com](https://labs.hackthebox.com) → DevTools → Network → `login/refresh`
 2. Copy `message.access_token` + `message.refresh_token`
-3. Update `.env`, **or** run: `seven set htb tokens <access> <refresh>`
+3. Update `config/docker/seven.env` (Docker) or `.env` (local), **or** run in Discord (admin DM):
+   - `seven htb token set <refresh>` — refresh-only (calls HTB `login/refresh`; paste full token once)
+   - `seven htb token set <access> <refresh>` — full pair (recommended)
+   - `seven htb token refresh` — renew using stored refresh token
 4. Configure persistence (Docker recommended):
    - `HTB_TOKEN_FILE=/var/log/sevenbot/htb_tokens.json` — loaded **first** on startup
-   - `HTB_ENV_FILE=/config/seven.env` — Compose mounts `./.env` read-write; refreshed after each OAuth rotation
+   - `HTB_ENV_FILE=/config/seven.env` — host `config/docker/seven.env`; refreshed after each OAuth rotation
 
-**Common pitfall:** HTB rotates the refresh token on every refresh. If only `.env` is updated manually but `HTB_TOKEN_FILE` still holds an old pair (or vice versa), the next restart fails. Use both persistence paths or `seven set htb tokens`.
+**Common pitfall:** HTB rotates the refresh token on every refresh. If only `config/docker/seven.env` is updated manually but `HTB_TOKEN_FILE` still holds an old pair (or vice versa), the next restart fails. Use both persistence paths or `seven htb token set`. Never reuse a refresh token you already pasted or tested.
 
 Access tokens renew automatically (~72h). Refresh failure requires a new browser login — there is no password-based recovery.
 

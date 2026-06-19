@@ -1,6 +1,7 @@
 node_modules/
 cache/*
 config/.env
+config/docker/seven.env
 .env
 docker-compose.override.yml
 .vs/

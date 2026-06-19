@@ -707,12 +707,21 @@ class HtbEmbeds {
 										` flag${flagNames.length>1?"s":""} ${F.andifyList(flagNames.map(o => `\`${o.special}\``),null,true)} on ${F.mdLink(target.name,F.profileUrl(target),true, "View on HTB")}.`
 					}
 					break
-				case "prolab": confirm = "🚧 Sorry, ownage data for specific Pro Lab flags is not stored in user activity streams by Hack The Box. Hopefully, a future update will fix this."; break
-				default: break
+				case "prolab": {
+					const progress = this.ds.getMemberLabProgressEntry(member, target)
+					const pct = progress ? Number(progress.completion_percentage) : 0
+					const memberLink = F.mdLink((member.self ? "You" : this.ds.tryDiscordifyUid(member.id)), F.profileUrl(member), true, "View on HTB")
+					const targetLink = F.mdLink(target.name, F.profileUrl(target), true, "View on HTB")
+					if (pct > 0) {
+						confirm = `${memberLink} has ${F.progressBar(pct)} (${pct}%) progress on ${targetLink}.`
+					} else if (owns.some((o) => o.flag_title)) {
+						confirm = `Yep, ${memberLink} got flag${owns.length > 1 ? "s" : ""} ${F.andifyList(owns.map((o) => `\`${o.flag_title}\``))} on ${targetLink}.`
+					} else {
+						confirm = "🚧 Sorry, ownage data for specific Pro Lab flags is not stored in user activity streams by Hack The Box. Hopefully, a future update will fix this."
+					}
+					break
 				}
-				// Send embed "owns found"
-				if(target.type == "prolab" || target.parent && target.parent.type=="prolab"){
-					confirm = "🚧 Sorry, ownage data for specific Pro Lab flags is not stored in user activity streams by Hack The Box. Hopefully, a future update will fix this."
+				default: break
 				}
 				var embed = this.MEMBER_INFO_BASE
 					.setAuthor("Ownage Check", F.avatar2Url(member.avatar), F.memberProfileUrl(member))
@@ -733,9 +742,6 @@ class HtbEmbeds {
 					.setAuthor("Ownage Check", F.avatar2Url(member.avatar), F.memberProfileUrl(member))
 					.setThumbnail(F.avatar2Url(target.avatar))
 					.setDescription(reject)
-				if(target.type == "prolab" || target.parent && target.parent.type=="prolab"){
-					embed2.setDescription("🚧 Sorry, ownage data for specific Pro Lab flags is not stored in user activity streams by Hack The Box. Hopefully, a future update will fix this.")
-				}
 				if (target.type == "challenge"){
 					embed2.attachFiles(new Attachment(`./static/img/${F.challengeCategoryNameToIconFile(target.category_name)}`, "cat.png"))
 						.setThumbnail("attachment://cat.png")
@@ -1060,6 +1066,68 @@ class HtbEmbeds {
 				.setAuthor("HTB notification", this.ds.TEAM_STATS?.avatar_url || undefined)
 				.setDescription(event.markdown || "New HTB notification.")
 		}
+	}
+
+	formatMsRemaining(ms) {
+		const sec = Math.max(0, Math.floor(Number(ms) / 1000))
+		const days = Math.floor(sec / 86400)
+		const hours = Math.floor((sec % 86400) / 3600)
+		const mins = Math.floor((sec % 3600) / 60)
+		if (days > 0) return `${days}d ${hours}h`
+		if (hours > 0) return `${hours}h ${mins}m`
+		return `${mins}m`
+	}
+
+	htbTokenStatus(status) {
+		const embed = status.expired || !status.hasAccessToken
+			? this.ERROR_BASE
+			: status.expiringSoon
+				? this.MEMBER_RANK_BASE
+				: this.TEAM_INFO_BASE
+
+		const lines = []
+		if (!status.hasAccessToken) {
+			lines.push("**Status:** missing access token")
+		} else if (status.expired) {
+			lines.push("**Status:** expired")
+		} else if (status.expiringSoon) {
+			lines.push(`**Status:** expiring soon (auto-refresh within ${status.expiryBufferSec}s buffer)`)
+		} else {
+			lines.push("**Status:** OK")
+		}
+
+		if (status.accessExpiresAtUtc) {
+			lines.push(`**Access expires:** ${status.accessExpiresAtUtc}`)
+		} else if (status.hasAccessToken) {
+			lines.push("**Access expires:** unknown (JWT has no `exp` claim)")
+		}
+
+		if (status.msUntilExpiry != null && status.msUntilExpiry > 0) {
+			lines.push(`**Time remaining:** ${this.formatMsRemaining(status.msUntilExpiry)}`)
+		}
+
+		lines.push(`**Auth mode:** \`${status.authMode || "oauth_refresh"}\``)
+		lines.push(`**Refresh token:** ${status.hasRefreshToken ? "configured" : "missing"}`)
+		lines.push(`**Persistence:** ${status.persistenceSource || "environment"}`)
+		if (status.tokenFilePath) {
+			lines.push(`**Token file:** \`${status.tokenFilePath}\``)
+		}
+		if (status.envFilePath) {
+			lines.push(`**Env sync:** \`${status.envFilePath}\``)
+		}
+
+		if (status.authFailurePending) {
+			lines.push("", `**Pending auth error:** ${status.authFailureMessage || "sync or refresh failed"}`)
+		}
+
+		lines.push(
+			"",
+			"_OAuth refresh runs automatically before expiry. Admin DM: `seven htb token set <access> <refresh>` (recommended) or `seven htb token set <refresh>` / `seven htb token refresh`. Capture a fresh pair from DevTools → login/refresh; each use invalidates the previous refresh token._"
+		)
+
+		return embed
+			.setAuthor("HTB OAuth token status", this.ds.TEAM_STATS?.avatar_url || undefined)
+			.setDescription(lines.join("\n"))
 	}
 
 	pusherStatus(status) {

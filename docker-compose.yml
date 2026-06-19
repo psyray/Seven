@@ -5,7 +5,7 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     env_file:
-      - .env
+      - config/docker/seven.env
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-seven}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
@@ -25,7 +25,7 @@ services:
     build: .
     restart: unless-stopped
     env_file:
-      - .env
+      - config/docker/seven.env
     environment:
       NODE_ENV: production
       HOME: /tmp
@@ -39,12 +39,14 @@ services:
       LOG_DIR: /var/log/sevenbot
       HTB_TOKEN_FILE: /var/log/sevenbot/htb_tokens.json
       HTB_ENV_FILE: /config/seven.env
+      HTB_ENV_TMP_DIR: /tmp
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - seven_logs:/var/log/sevenbot
-      - ./.env:/config/seven.env:rw
+      # Writable dir (read_only root cannot create *.tmp next to a single-file bind mount)
+      - ./config/docker:/config:rw
     networks:
       - seven_net
     security_opt:

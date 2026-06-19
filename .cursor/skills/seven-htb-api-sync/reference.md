@@ -41,7 +41,7 @@ On-demand: `ensureTarget()` — Pusher + `resolveEntWithEnsure`; never full-sect
 1. Startup: load `HTB_TOKEN_FILE` if present, else `.env` pair
 2. Before requests: refresh if access expires within 120s (`POST /login/refresh`)
 3. After refresh: persist JSON + optional `HTB_ENV_FILE` atomic update
-4. Hot-reload: `seven set htb tokens <access> <refresh>` or `fs.watchFile(HTB_TOKEN_FILE)`
+4. Hot-reload: `seven htb token set <refresh>` or `seven htb token set <access> <refresh>`; `fs.watchFile(HTB_TOKEN_FILE)`
 5. Failure: `HtbAuthError` — bot stays online; captains notified via Discord DM
 
 ## API version usage

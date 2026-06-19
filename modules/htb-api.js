@@ -15,6 +15,8 @@ const MACHINE_PROFILE_CONCURRENCY = Math.max(1, Number(process.env.HTB_MACHINE_P
 const MACHINE_LIST_PAGE_SIZE = 100
 const RATE_LIMIT_WAIT_LOG_EVERY_MS = Number(process.env.HTB_RATE_LIMIT_LOG_EVERY_MS) || 15000
 const RATE_LIMIT_WAIT_THRESHOLD_MS = Number(process.env.HTB_RATE_LIMIT_WAIT_THRESHOLD_MS) || 3000
+/** Log each HTB 400 endpoint key once per process to avoid spam. */
+const loggedHtb400EndpointKeys = new Set()
 
 function logBatchProgress(label, current, total) {
 	if (current === 1 || current === total || current % PROGRESS_EVERY === 0) {
@@ -141,6 +143,7 @@ function isHtmlResponse(text) {
 
 const HTB_NO_RETRY_STATUSES = [400, 401, 403, 404, 405, 410, 422]
 const TOKEN_EXPIRY_BUFFER_SEC = 120
+const HTB_OAUTH_USER_AGENT = process.env.HTB_OAUTH_USER_AGENT || "SevenBot/1.0 (HTB OAuth)"
 
 class HtbTokenExpiredError extends Error {
 	constructor(message = "HTB token expired") {
@@ -179,7 +182,24 @@ async function fetchOptionalList(api, endpointPath, label) {
 const OPTIONAL_MEMBER_PROFILE_PATH_PREFIXES = [
 	"user/profile/progress/endgame/",
 	"user/profile/progress/machines/os/",
+	"user/profile/activity/",
 ]
+
+function extractHtbErrorBody(response) {
+	const body = response?.body || {}
+	if (typeof body?.message === "string") return body.message.slice(0, 200)
+	if (body?.message) return JSON.stringify(body.message).slice(0, 200)
+	return (response?.text || "").slice(0, 200)
+}
+
+function logHtb400Once(endpointPath, response) {
+	const key = getThrottleEndpointKey(endpointPath)
+	if (loggedHtb400EndpointKeys.has(key)) return
+	loggedHtb400EndpointKeys.add(key)
+	log.warn(`HTB API HTTP 400 for ${endpointPath}`, {
+		body: extractHtbErrorBody(response),
+	})
+}
 
 function extractMemberActivityFromResponse(res) {
 	const profile = res?.profile || res?.message?.profile || res?.data?.profile || res?.message
@@ -191,6 +211,16 @@ function parseActivityTimestamp(entry) {
 	const raw = entry?.date || entry?.created_at || entry?.updated_at
 	if (!raw) return NaN
 	return Date.parse(raw)
+}
+
+function extractTeamActivityItems(res) {
+	if (Array.isArray(res)) return res
+	return res?.data || res?.activity || res?.info?.activity || []
+}
+
+function nPastDaysFromSinceMs(sinceMs) {
+	const msBack = sinceMs ? Math.max(Date.now() - sinceMs, 86400000) : 86400000
+	return Math.min(90, Math.max(1, Math.ceil(msBack / 86400000)))
 }
 
 function isOptionalMemberProfilePath(endpointPath) {
@@ -230,9 +260,12 @@ class HtbApiConnector {
 		this.tokenFilePath = (process.env.HTB_TOKEN_FILE || "").trim()
 		this.envFilePath = (process.env.HTB_ENV_FILE || "").trim()
 		this._tokenRefreshPromise = null
+		this.authFailureLocked = false
+		this._oauthMaintenance = false
 		this.throttles = {}
 		this.rateLimitBuckets = {}
 		this.tokenExpiryWarned = false
+		this._profileActivity400Logged = false
 		this.throttle = new Throttle({
 			active: true,
 			rate: 25,
@@ -277,7 +310,12 @@ class HtbApiConnector {
 
 		if (this.checkTokenExpiring(this.API_TOKEN)) {
 			log.info("Access token expiring at startup — refreshing")
-			await this.refreshSessionToken()
+			try {
+				await this.refreshSessionToken()
+			} catch (error) {
+				this.authFailureLocked = true
+				throw error
+			}
 		} else if (this.tokenFilePath && !fs.existsSync(this.tokenFilePath)) {
 			this.persistOAuthTokens()
 		}
@@ -355,6 +393,7 @@ class HtbApiConnector {
 	}
 
 	async reloadTokensFromFile({ refreshIfExpiring = true } = {}) {
+		if (this._oauthMaintenance) return false
 		if (!this.tokenFilePath) return false
 
 		const fromFile = loadOAuthTokensFromFile(this.tokenFilePath)
@@ -405,7 +444,39 @@ class HtbApiConnector {
 		log.info(`HTB rate limit: ${phase} — ${endpointPath}`, { endpoint, ...meta })
 	}
 
+	getApiToken() {
+		return this.API_TOKEN
+	}
+
+	isAuthBlocked() {
+		return this.authFailureLocked
+	}
+
+	beginOAuthMaintenance() {
+		this._oauthMaintenance = true
+	}
+
+	endOAuthMaintenance() {
+		this._oauthMaintenance = false
+	}
+
+	clearAuthFailureLock() {
+		this.authFailureLocked = false
+	}
+
+	async awaitRefreshSettled() {
+		if (!this._tokenRefreshPromise) return
+		try {
+			await this._tokenRefreshPromise
+		} catch (_) {
+			// ignore — caller will start a fresh refresh if needed
+		}
+	}
+
 	async ensureValidToken() {
+		if (this.authFailureLocked) {
+			throw new HtbAuthError("HTB OAuth refresh paused after auth failure — run `seven htb token set <refresh>`")
+		}
 		if (!this.checkTokenExpiring(this.API_TOKEN)) return
 
 		try {
@@ -423,22 +494,65 @@ class HtbApiConnector {
 
 	async refreshSessionToken() {
 		if (!this._tokenRefreshPromise) {
-			this._tokenRefreshPromise = this._refreshSessionTokenOnce()
-				.finally(() => { this._tokenRefreshPromise = null })
+			const promise = this._refreshSessionTokenOnce()
+			this._tokenRefreshPromise = promise
+			promise.finally(() => {
+				if (this._tokenRefreshPromise === promise) {
+					this._tokenRefreshPromise = null
+				}
+			})
 		}
 		return this._tokenRefreshPromise
 	}
 
+	async forceRefreshSession() {
+		await this.awaitRefreshSettled()
+		this._tokenRefreshPromise = null
+		this.authFailureLocked = false
+		return this.refreshSessionToken()
+	}
+
+	async refreshWithRefreshToken(refreshToken) {
+		const refresh = (refreshToken || "").trim()
+		if (!refresh) {
+			throw new HtbAuthError("HTB refresh token cannot be empty")
+		}
+		await this.awaitRefreshSettled()
+		this._tokenRefreshPromise = null
+		this.authFailureLocked = false
+		const backup = {
+			access: this.API_TOKEN,
+			refresh: this.REFRESH_TOKEN,
+		}
+		this.REFRESH_TOKEN = refresh
+		try {
+			await this.refreshSessionToken()
+		} catch (error) {
+			this.API_TOKEN = backup.access
+			this.REFRESH_TOKEN = backup.refresh
+			throw error
+		}
+	}
+
 	async _refreshSessionTokenOnce() {
-		if (!this.REFRESH_TOKEN) {
+		const refreshSnapshot = (this.REFRESH_TOKEN || "").trim()
+		if (!refreshSnapshot) {
 			throw new HtbAuthError("HTB_REFRESH_TOKEN is missing")
 		}
 
+		log.info("HTB OAuth refresh request", {
+			refreshPrefix: refreshSnapshot.slice(0, 8),
+			refreshLen: refreshSnapshot.length,
+		})
+
 		const data = await this.htbApiPost("login/refresh", {
-			refresh_token: this.REFRESH_TOKEN,
-		}, { authorized: false })
+			refresh_token: refreshSnapshot,
+		}, { authorized: false, oauth: true })
 
 		const payload = data?.message || data
+		if (typeof payload === "string") {
+			throw new HtbAuthError(`HTB refresh rejected: ${payload.slice(0, 120)}`)
+		}
 		if (!payload?.access_token) {
 			throw new HtbAuthError("HTB refresh failed: no access_token in response")
 		}
@@ -446,9 +560,15 @@ class HtbApiConnector {
 			throw new HtbAuthError("HTB refresh failed: no refresh_token in response")
 		}
 
+		if (this.REFRESH_TOKEN !== refreshSnapshot) {
+			log.warn("HTB OAuth refresh ignored — refresh token superseded during request")
+			throw new HtbAuthError("HTB OAuth refresh superseded — retry `seven htb token refresh`")
+		}
+
 		this.API_TOKEN = payload.access_token
 		this.REFRESH_TOKEN = payload.refresh_token
 		this.tokenExpiryWarned = false
+		this.authFailureLocked = false
 		this.persistOAuthTokens()
 		log.info("OAuth session refreshed", { expiresAt: this.getTokenExpiry()?.toISOString() || "unknown" })
 		if (typeof this.onTokensRefreshed === "function") {
@@ -470,8 +590,11 @@ class HtbApiConnector {
 				: (response?.text || "").slice(0, 200)
 
 		if (status === 401) {
+			if (label.includes("login/refresh")) {
+				log.warn("HTB OAuth refresh rejected", { body: messageText || "Unauthenticated." })
+			}
 			return new HtbAuthError(
-				"HTB_REFRESH_TOKEN invalid — re-login on HTB and update HTB_V4_TOKEN + HTB_REFRESH_TOKEN"
+				"HTB refresh token rejected — capture a fresh `refresh_token` from DevTools (login/refresh) right after browser login; each successful refresh invalidates the previous one"
 			)
 		}
 
@@ -482,11 +605,22 @@ class HtbApiConnector {
 		const base = options.base || HTB_API_BASE
 		const url = `${base}/${endpointPath}`
 		const authorized = options.authorized !== false
+		const oauth = options.oauth === true
 
 		return new Promise((resolve, reject) => {
+			const headers = {
+				Accept: "application/json, */*",
+				"Content-Type": "application/json",
+			}
+			if (oauth) {
+				headers["User-Agent"] = HTB_OAUTH_USER_AGENT
+				headers.Origin = "https://labs.hackthebox.com"
+				headers.Referer = "https://labs.hackthebox.com/"
+			}
+
 			let req = request.agent()
 				.post(url)
-				.set({ Accept: "application/json, */*", "Content-Type": "application/json" })
+				.set(headers)
 				.send(body)
 				.timeout({ response: 120000, deadline: 240000 })
 
@@ -499,6 +633,9 @@ class HtbApiConnector {
 					const err = this.buildAuthHttpError(response, `POST ${endpointPath}`)
 					err.status = response.status
 					err.response = response
+					if (oauth && response.status === 401) {
+						this.authFailureLocked = true
+					}
 					return reject(err)
 				}
 
@@ -532,6 +669,9 @@ class HtbApiConnector {
 		} catch (error) {
 			if (error.status !== 401) {
 				throw error
+			}
+			if (this.authFailureLocked) {
+				throw error instanceof HtbAuthError ? error : new HtbAuthError(error.message)
 			}
 			log.warn("HTB API returned 401 — attempting OAuth refresh", { endpoint: endpointPath })
 			try {
@@ -622,12 +762,15 @@ class HtbApiConnector {
 					}
 
 					if (response.status >= 400) {
+						if (response.status === 400) {
+							logHtb400Once(endpointPath, response)
+						}
 						const err = new Error(`HTTP ${response.status} for ${endpointPath}`)
 						err.status = response.status
 						err.response = response
-						if (response.status === 404 && isOptionalMemberProfilePath(endpointPath)) {
-							log.debug(`Optional member profile endpoint unavailable (404)`, { endpoint: endpointPath })
-							return resolve({ profile: {} })
+						if ((response.status === 404 || response.status === 400) && isOptionalMemberProfilePath(endpointPath)) {
+							log.debug(`Optional member profile endpoint unavailable (${response.status})`, { endpoint: endpointPath })
+							return resolve({ profile: { activity: [] } })
 						}
 						return reject(err)
 					}
@@ -1123,10 +1266,20 @@ class HtbApiConnector {
 	}
 
 	getCompleteTeamProfile(teamId) {
-		return Promise.all([this.getTeamProfile(teamId),
-		this.getTeamOwnStats(teamId),
-		this.getTeamStatsGraphForDuration(teamId, "1W").then(res => ({ respects: res.respect.pop() }))]
-		).then(res => H.combine([...res, { type: "team" }]))
+		const respectsPromise = this.getTeamStatsGraphForDuration(teamId, "1W")
+			.then(res => ({ respects: res.respect?.pop?.() ?? null }))
+			.catch(error => {
+				if (error.status === 400 || error.status === 404) {
+					log.warn("team/graph unavailable — skipping respects", { teamId, status: error.status })
+					return { respects: null }
+				}
+				throw error
+			})
+		return Promise.all([
+			this.getTeamProfile(teamId),
+			this.getTeamOwnStats(teamId),
+			respectsPromise,
+		]).then(res => H.combine([...res, { type: "team" }]))
 	}
 
 	getTeamMembers(teamId, excludedIds = []) {
@@ -1138,26 +1291,48 @@ class HtbApiConnector {
 		return this.htbApiGet(`team/invitations/${teamId}`)
 	}
 
-	getTeamActivity(teamId) {
-		return this.htbApiGet(`team/activity/${teamId}`)
+	getTeamActivity(teamId, { nPastDays = null } = {}) {
+		const query = nPastDays ? `?n_past_days=${nPastDays}` : ""
+		return this.htbApiGet(`team/activity/${teamId}${query}`)
 	}
 
 	getRecentTeamActivity(teamId, sinceMs = null) {
-		return this.getTeamActivity(teamId).then(res => {
-			const items = Array.isArray(res)
-				? res
-				: (res?.data || res?.activity || res?.info?.activity || [])
+		const nPastDays = sinceMs ? nPastDaysFromSinceMs(sinceMs) : null
+		return this.getTeamActivity(teamId, { nPastDays }).then(res => {
+			const items = extractTeamActivityItems(res)
 			if (!sinceMs) return items
 			return items.filter(item => {
-				const ts = Date.parse(item.date || item.created_at || item.updated_at)
+				const ts = parseActivityTimestamp(item)
 				return Number.isFinite(ts) && ts > sinceMs
 			})
 		})
 	}
 
 	/**
-	 * Fetch recent activity for team members via user/profile/activity (OAuth-safe).
-	 * Prefer this over team/activity which often returns 401 with v4 OAuth tokens.
+	 * Preferred Pusher fallback: single team/activity call (HTB removed per-user profile/activity in June 2026).
+	 * @param {number} teamId
+	 * @param {number|null} sinceMs
+	 */
+	async getRecentTeamActivityForFallback(teamId, sinceMs = null) {
+		const items = await this.getRecentTeamActivity(teamId, sinceMs)
+		const mapped = []
+		for (const entry of items) {
+			const uid = entry.user?.id ?? entry.user_id
+			if (!uid) continue
+			const ts = parseActivityTimestamp(entry)
+			mapped.push({
+				...entry,
+				user_id: Number(uid),
+				first_blood: Boolean(entry.first_blood),
+				_activityTs: Number.isFinite(ts) ? ts : Date.now(),
+			})
+		}
+		return mapped.sort((a, b) => b._activityTs - a._activityTs)
+	}
+
+	/**
+	 * Fetch recent activity for team members via user/profile/activity (legacy fallback).
+	 * Prefer getRecentTeamActivityForFallback when team/activity is available.
 	 * @param {number[]} memberIds
 	 * @param {number|null} sinceMs
 	 */
@@ -1173,7 +1348,12 @@ class HtbApiConnector {
 					error.endpoint = `user/profile/activity/${id}`
 					throw error
 				}
-				log.warn("Member activity fetch failed", { memberId: id, message: error.message })
+				if (error.status === 400 && !this._profileActivity400Logged) {
+					this._profileActivity400Logged = true
+					log.warn("user/profile/activity unavailable (400) — per-member fallback returning empty", {
+						endpoint: "user/profile/activity",
+					})
+				}
 				return { id: Number(id), activity: [] }
 			}
 		}))
@@ -1245,10 +1425,6 @@ class HtbApiConnector {
 				if (!Array.isArray(members)) return []
 				return members.filter(member => !excludedIds.includes(member.id) && member.role != "pending")
 			})
-	}
-
-	getApiToken() {
-		return this.API_TOKEN
 	}
 
 	getMemberIdFromUsername(username = "ThisUserCouldNotPossiblyExist") {
@@ -1370,6 +1546,40 @@ class HtbApiConnector {
 
 	async getMemberActivity(memberId) {
 		return this.htbApiGet("user/profile/activity/" + memberId)
+	}
+
+	getOAuthTokenStatus() {
+		const accessToken = (this.API_TOKEN || "").trim()
+		const refreshToken = (this.REFRESH_TOKEN || "").trim()
+		const hasAccessToken = Boolean(accessToken)
+		const hasRefreshToken = Boolean(refreshToken)
+		const expiry = hasAccessToken ? this.getTokenExpiry(accessToken) : null
+		const nowMs = Date.now()
+		const msUntilExpiry = expiry ? expiry.getTime() - nowMs : null
+		const expired = !hasAccessToken || !expiry || msUntilExpiry <= 0
+		const expiringSoon = !expired && this.checkTokenExpiring(accessToken)
+
+		let persistenceSource = "environment"
+		if (this.tokenFilePath && fs.existsSync(this.tokenFilePath)) {
+			persistenceSource = this.envFilePath ? "HTB_TOKEN_FILE + HTB_ENV_FILE" : "HTB_TOKEN_FILE"
+		} else if (this.envFilePath) {
+			persistenceSource = "HTB_ENV_FILE"
+		}
+
+		return {
+			authMode: this.getAuthMode(),
+			hasAccessToken,
+			hasRefreshToken,
+			accessExpiresAt: expiry?.toISOString() || null,
+			accessExpiresAtUtc: expiry?.toUTCString() || null,
+			msUntilExpiry: expired ? 0 : msUntilExpiry,
+			expired,
+			expiringSoon,
+			expiryBufferSec: TOKEN_EXPIRY_BUFFER_SEC,
+			persistenceSource,
+			tokenFilePath: this.tokenFilePath || null,
+			envFilePath: this.envFilePath || null,
+		}
 	}
 
 	checkTokenExpiring(token) {

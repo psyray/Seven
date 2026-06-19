@@ -12,7 +12,7 @@ Seven connects to Hack The Box using **OAuth access/refresh tokens** on the v4 A
 | Refresh | `POST ${HTB_API_BASE}/login/refresh` with `{ refresh_token }` — automatic when access expires within 120s |
 | Persistence | `HTB_TOKEN_FILE` JSON + optional `HTB_ENV_FILE` `.env` sync after each refresh |
 | Load order | `HTB_TOKEN_FILE` first, then `.env` — never mix stale `.env` refresh with file access token |
-| Hot-reload | Discord `seven set htb tokens <access> <refresh>` (local NLP) or watch `HTB_TOKEN_FILE` |
+| Hot-reload | Discord `seven htb token set <refresh>` or `seven htb token set <access> <refresh>` (local NLP) or watch `HTB_TOKEN_FILE` |
 
 Obtain the token pair: log in on [labs.hackthebox.com](https://labs.hackthebox.com) via browser → DevTools → Network → capture `login/refresh` response (`message.access_token` + `message.refresh_token`).
 
@@ -93,7 +93,7 @@ Helper methods:
 | `HTB_V4_TOKEN` | Yes | — | OAuth access token (JWT) |
 | `HTB_REFRESH_TOKEN` | Yes | — | OAuth refresh token |
 | `HTB_TOKEN_FILE` | No | — | JSON file for token persistence and hot-reload (startup priority) |
-| `HTB_ENV_FILE` | No | — | `.env` path synced after each refresh (`helpers/env-tokens.js`) |
+| `HTB_ENV_FILE` | No | — | Env file synced after each refresh (Docker: host `config/docker/seven.env`) |
 | `HTB_TOKEN_EXPIRY_WARN_DAYS` | No | 1 | Days before access expiry to alert admins |
 | `HTB_TEAM_ID` | Yes* | — | Team ID |
 | `HTB_UNIVERSITY_ID` | Alt* | — | University instead of team |
@@ -136,13 +136,12 @@ Some v4 member sub-endpoints return 404 for members without optional data (e.g. 
 
 ## Real-time notifications (fallback API)
 
-When Pusher is unhealthy, `NotificationRouter` polls member activity via:
+When Pusher is unhealthy, `NotificationRouter` polls team activity via:
 
-- `user/profile/activity/{memberId}` through `HtbApiConnector.getRecentMemberActivities()`
+- **Primary:** `GET team/activity/{teamId}?n_past_days=N` through `HtbApiConnector.getRecentTeamActivityForFallback()` (includes `user.id` per entry)
+- **Legacy fallback:** `user/profile/activity/{memberId}` — returns 400 on current HTB API; treated as optional empty
 
-Note: `GET team/activity/{teamId}` often returns **401** with OAuth v4 tokens — do not use it for fallback.
-
-Used for catch-up after sustained Pusher disconnect (≥15s) and periodic fallback (`PUSHER_FALLBACK_POLL_MS`, **always active**). Live owns still come primarily from Pusher (`helpers/pusher-htb.js`).
+`team/graph` for team respects is optional (400/404 → skip). Used for catch-up after sustained Pusher disconnect (≥15s) and periodic fallback (`PUSHER_FALLBACK_POLL_MS`, **always active**). Live owns still come primarily from Pusher (`helpers/pusher-htb.js`).
 
 ### Pro lab catalog notes
 

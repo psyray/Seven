@@ -104,7 +104,8 @@ Dialogflow may still supply `targetFilterBasis` (e.g. `blang: "Active Directory"
 | `admin.forceUpdateData` | `forceUpdate()` | `{ force: true }` |
 | `admin.syncSection` | `admin_syncSection()` | `{ sections: [...] }` — `seven sync machines` etc. |
 | `admin.clearCached` | `admin_clearCached()` | `{ full: true, bootstrap: true }` |
-| `admin.setHtbTokens` | `admin_setHtbTokens()` | local NLP: `set htb tokens …` |
+| `admin.htbTokenSet` | `admin_htbTokenSet()` | local NLP: `htb token set …` |
+| `admin.htbTokenStatus` | `admin_htbTokenStatus()` | local NLP: `htb token status` |
 | `admin.pusherStatus` | `NOTIFICATION_ROUTER.getStatusEmbed()` | — |
 | `captain.pusherHistory` | `NOTIFICATION_ROUTER.getHistoryEmbed()` | — |
 | `captain.pusherRepost` | `NOTIFICATION_ROUTER.repostToChannel()` | `forceRepost` skips dedup + stat integration |
@@ -145,8 +146,9 @@ Config: `PUSHER_*` vars via `helpers/pusher-config.js` (see `static/templates/.e
 2. Test in Discord: `seven team info`, `seven <machinename>`, `seven <username> rank`
 3. Test empty cache: clear → verify graceful embeds, not crashes
 4. Pusher parser: `npm run test:pusher`
-5. Admin status: `seven pusher status`
+5. Admin status: `seven pusher status`, `seven htb token status`
 6. Captain history/repost: `seven pusher history`, `seven pusher repost last` (after an event is stored)
+7. Admin OAuth: `seven htb token set <refresh>` or `seven htb token set <access> <refresh>`
 
 ## Key files
 

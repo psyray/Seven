@@ -31,7 +31,9 @@ The access token expires in ~72 hours; Seven refreshes it automatically via `POS
 
 ### Optional: token persistence (Docker)
 
-Set `HTB_TOKEN_FILE=/var/log/sevenbot/htb_tokens.json` (volume `seven_logs`) and `HTB_ENV_FILE=/config/seven.env` (Compose mounts `./.env` read-write). Seven loads the file first on startup and, after each OAuth refresh, updates both the JSON file and `.env` so restarts never reuse a stale refresh token from `.env` alone:
+Compose sets `HTB_TOKEN_FILE=/var/log/sevenbot/htb_tokens.json` (volume `seven_logs`) and `HTB_ENV_FILE=/config/seven.env` (host path `config/docker/seven.env`, mounted read-write). Run `npm run docker:prepare` (also runs before `docker:up`) to seed `config/docker/seven.env` from `.env` or the template.
+
+Seven loads the JSON file **first** on startup and, after each OAuth refresh, updates both the JSON file and `config/docker/seven.env` so restarts never reuse a stale refresh token from an old copy alone:
 
 ```json
 {
@@ -39,6 +41,19 @@ Set `HTB_TOKEN_FILE=/var/log/sevenbot/htb_tokens.json` (volume `seven_logs`) and
   "refresh_token": "..."
 }
 ```
+
+### Discord hot-reload (no restart)
+
+When persistence is configured (`HTB_TOKEN_FILE` / `HTB_ENV_FILE`), you can update tokens from Discord (admin, use DM):
+
+```
+seven htb token status
+seven htb token set <refresh>
+seven htb token refresh
+seven htb token set <access_jwt> <refresh>
+```
+
+Capture tokens from DevTools → Network → `login/refresh` on [labs.hackthebox.com](https://labs.hackthebox.com). See [operations.md](operations.md#htb-oauth-tokens-admin).
 
 ### Team ID
 
@@ -59,7 +74,10 @@ For university deployments, use `HTB_UNIVERSITY_ID` instead of `HTB_TEAM_ID`.
 
 ```bash
 cp static/templates/.env.docker.example .env
+npm run docker:prepare   # creates config/docker/seven.env for Compose (from .env or template)
 ```
+
+Docker Compose loads **`config/docker/seven.env`** for both Postgres and Seven (`env_file` in `docker-compose.yml`). Keep editing that file for Docker deployments; root `.env` is still used for local dev and Compose `${POSTGRES_*}` substitution.
 
 Fill all required variables. See [environment.md](environment.md) for the complete reference.
 

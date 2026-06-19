@@ -37,7 +37,9 @@ Entity sync runs after HTB data refresh. On dev instances (`IS_DEV_INSTANCE=true
 
 Pusher maintenance phrases (regex in `resolveLocalIntent()`):
 
-- `set htb tokens <access> <refresh>` → admin OAuth hot-reload
+- `htb token status` / `token status` → admin OAuth status embed
+- `htb token set <refresh>` → admin OAuth refresh via HTB `login/refresh`
+- `htb token set <access> <refresh>` → admin full OAuth hot-reload (`set htb tokens …` legacy alias)
 - `pusher status` → admin status embed
 - `pusher history` / `pusher history <member>` → captain DB history
 - `pusher repost last` / `pusher repost <id>` → captain forced announce

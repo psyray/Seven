@@ -252,7 +252,8 @@ function sectionCaptain() {
 - ║   Access renews automatically; no manual App Token.
 - ║   If refresh fails, captains get a DM with fix steps.
 - ║   Re-login on labs.hackthebox.com → DevTools → Network
-- ║   → capture login/refresh → update tokens (see Admin).
+- ║   → login/refresh → capture a **fresh** token pair (see Admin).
+- ║   HTB invalidates each refresh token after use — never reuse an old paste.
 - ║   Bot stays online with cached data until tokens are fixed.
 # ║ Notification history (captain only)
 - ║   "pusher history" — last stored HTB events (all members)
@@ -267,11 +268,15 @@ function sectionAdmin() {
 	return `_______  ADMIN ONLY  _______
 
 ══╗
-# ║ HTB OAuth tokens (hot-reload)
-- ║   "set htb tokens <access_jwt> <refresh>"
-- ║   Updates HTB_V4_TOKEN + HTB_REFRESH_TOKEN in memory.
-- ║   No restart if you use this or HTB_TOKEN_FILE (JSON).
-- ║   Pair from labs.hackthebox.com login/refresh response.
+# ║ HTB OAuth tokens (admin — use DM)
+- ║   "htb token status" — access expiry + refresh/persistence paths
+- ║   "htb token set <refresh>" — paste full refresh (~700+ chars), once
+- ║   "htb token refresh" — renew access using stored refresh token
+- ║   "htb token set <access_jwt> <refresh>" — full pair (recommended)
+- ║   labs.hackthebox.com → DevTools → Network → login/refresh
+- ║   Use a fresh token from that response; each refresh invalidates the old one
+- ║   Docker: OAuth sync writes host config/docker/seven.env after success
+- ║   Legacy: "set htb tokens <access> <refresh>"
 # ║ Cache & sync
 - ║   "clear cache" — wipe memory + delta bootstrap from HTB
 - ║   "pusher status" — Pusher connection + recent events

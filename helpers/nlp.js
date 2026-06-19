@@ -71,8 +71,75 @@ function normalizeFilterBasis(raw) {
 	return []
 }
 
+const HTB_ACCESS_JWT_PAIR_RE = /^([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\s+(\S+)$/
+const HTB_TOKEN_SET_CMD_RE = /^(?:seven[\s\t]+)?(?:htb\s+token\s+set|set\s+htb\s+tokens)\s+/i
+
+/** HTB OAuth refresh tokens are ~700+ chars — do not apply the 255-char DialogFlow trim. */
+function shouldPreserveFullMessageContent(content) {
+	if (!content) return false
+	return HTB_TOKEN_SET_CMD_RE.test(content.trim())
+}
+
+function trimMessageContentForHandler(content) {
+	if (!content) return content
+	if (shouldPreserveFullMessageContent(content)) {
+		return content.length > 2000 ? content.substring(0, 2000) : content
+	}
+	return content.substring(0, 255)
+}
+
+/** Long OAuth paste commands must not go through DialogFlow (256-char input limit). */
+function resolveLocalIntentWithoutDialogFlow(content) {
+	if (!shouldPreserveFullMessageContent(content)) return null
+	const local = resolveLocalIntent(content, null, null)
+	if (!local?.allRequiredParamsPresent) return null
+	return local
+}
+
 /**
- * Resolve a local intent when DialogFlow misses or returns incomplete parameters.
+ * Parse `htb token set …` (access+refresh pair or refresh-only) including multiline paste and markdown wrappers.
+ * Legacy alias: `set htb tokens …` (pair only).
+ * @param {string} content
+ * @returns {{ mode: "pair"|"refresh", htbAccessToken?: string, htbRefreshToken: string }|null}
+ */
+function parseHtbTokenSetCommand(content) {
+	if (!content) return null
+	const stripped = content.trim().replace(/[`'"]/g, "")
+	let headerMatch = stripped.match(/^htb\s+token\s+set\s+([\s\S]+)$/i)
+	if (!headerMatch) {
+		headerMatch = stripped.match(/^set\s+htb\s+tokens\s+([\s\S]+)$/i)
+	}
+	if (!headerMatch) return null
+
+	const rest = headerMatch[1].replace(/\s+/g, " ").trim()
+	if (!rest) return null
+
+	const jwtMatch = rest.match(HTB_ACCESS_JWT_PAIR_RE)
+	if (jwtMatch) {
+		return {
+			mode: "pair",
+			htbAccessToken: jwtMatch[1],
+			htbRefreshToken: jwtMatch[2],
+		}
+	}
+
+	return {
+		mode: "refresh",
+		htbRefreshToken: rest,
+	}
+}
+
+/** @deprecated Use parseHtbTokenSetCommand */
+function parseSetHtbTokensCommand(content) {
+	const parsed = parseHtbTokenSetCommand(content)
+	if (!parsed || parsed.mode !== "pair") return null
+	return {
+		htbAccessToken: parsed.htbAccessToken,
+		htbRefreshToken: parsed.htbRefreshToken,
+	}
+}
+
+/**
  * @param {string} content - Raw user message (after "seven" prefix removal).
  * @param {{ intent?: { displayName?: string } }|null} [dfResult]
  * @param {object} [decodedParams] - DialogFlow parameters after struct.decode()
@@ -166,16 +233,32 @@ function resolveLocalIntent(content, dfResult = null, decodedParams = null) {
 		}
 	}
 
-	const setHtbTokensMatch = text.match(/^set\s+htb\s+tokens\s+([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\s+(\S+)\s*$/i)
-	if (setHtbTokensMatch) {
+	const htbTokenSet = parseHtbTokenSetCommand(text)
+	if (htbTokenSet) {
 		return {
-			intent: "admin.setHtbTokens",
-			parameters: { htbAccessToken: setHtbTokensMatch[1], htbRefreshToken: setHtbTokensMatch[2] },
+			intent: "admin.htbTokenSet",
+			parameters: htbTokenSet,
 			allRequiredParamsPresent: true,
 		}
 	}
 
-	if (/^pusher\s+status\s*$/.test(lower)) {
+	if (/^htb\s+token\s+refresh\s*$/i.test(lower)) {
+		return {
+			intent: "admin.htbTokenRefresh",
+			parameters: {},
+			allRequiredParamsPresent: true,
+		}
+	}
+
+	if (/^htb\s+token\s+status\s*$/i.test(lower) || /^htb\s+tokens\s+status\s*$/i.test(lower) || /^token\s+status\s*$/i.test(lower)) {
+		return {
+			intent: "admin.htbTokenStatus",
+			parameters: {},
+			allRequiredParamsPresent: true,
+		}
+	}
+
+	if (/^pusher\s+status\s*$/i.test(lower)) {
 		return {
 			intent: "admin.pusherStatus",
 			parameters: {},
@@ -295,5 +378,10 @@ function resolveLocalIntent(content, dfResult = null, decodedParams = null) {
 module.exports = {
 	checkSelfName,
 	extractTargetNameFromMessage,
+	parseHtbTokenSetCommand,
+	parseSetHtbTokensCommand,
+	shouldPreserveFullMessageContent,
+	trimMessageContentForHandler,
+	resolveLocalIntentWithoutDialogFlow,
 	resolveLocalIntent,
 }

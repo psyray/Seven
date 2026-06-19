@@ -34,7 +34,9 @@ Syncs entity types (machines, challenges, members, flags) upstream/downstream. S
 
 Local commands (no Dialogflow intent) in `resolveLocalIntent()`:
 
-- `set htb tokens <access> <refresh>` (admin)
+- `htb token status` / `token status` (admin)
+- `htb token set <refresh>` — OAuth refresh (admin)
+- `htb token set <access> <refresh>` — full pair (admin; legacy: `set htb tokens …`)
 - `pusher status` (admin)
 - `pusher history [member]`, `pusher repost last|<id>` (captain)
 

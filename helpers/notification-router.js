@@ -49,6 +49,8 @@ class NotificationRouter {
 		this.pusherDisconnectedAt = null
 		this.pusherDisconnectTimer = null
 		this.pusherAdminAlertSent = false
+		this.fallbackTeamActivityFailedLogged = false
+		this.fallbackMemberActivityFailedLogged = false
 		/** Owns already posted to Discord (independent of HTB cache / force-update). */
 		this.announcedOwnKeys = new Set()
 		this.lastFallbackPollStats = null
@@ -482,9 +484,10 @@ class NotificationRouter {
 	}
 
 	normalizeMemberActivityItem(entry, uid) {
+		const resolvedUid = uid || entry.user?.id || entry.user_id
 		const objectType = String(entry.object_type || "").toLowerCase()
 		const targetName = entry.name
-		if (!uid || !objectType || !targetName) return null
+		if (!resolvedUid || !objectType || !targetName) return null
 
 		let type = objectType
 		let flag = entry.type
@@ -502,12 +505,12 @@ class NotificationRouter {
 
 		const time = entry._activityTs || Date.parse(entry.date || entry.created_at) || Date.now()
 		return {
-			uid: Number(uid),
+			uid: Number(resolvedUid),
 			time,
 			type,
 			target: targetName,
 			flag,
-			blood: false,
+			blood: Boolean(entry.first_blood || entry.blood),
 			channel: "member-activity-fallback",
 		}
 	}
@@ -519,11 +522,39 @@ class NotificationRouter {
 	}
 
 	async fetchRecentMemberActivity(sinceMs) {
+		const teamId = this.getTeamId?.()
+		if (teamId && this.dat.V4API?.getRecentTeamActivityForFallback) {
+			try {
+				return await this.dat.V4API.getRecentTeamActivityForFallback(teamId, sinceMs)
+			} catch (error) {
+				if ([400, 401, 403].includes(error.status)) {
+					if (!this.fallbackTeamActivityFailedLogged) {
+						this.fallbackTeamActivityFailedLogged = true
+						log.warn("Team activity fallback unavailable", {
+							teamId,
+							status: error.status,
+							message: error.message,
+						})
+					}
+				} else {
+					throw error
+				}
+			}
+		}
+
 		const memberIds = Object.keys(this.dat.TEAM_MEMBERS || {}).map(Number)
 		if (!memberIds.length || !this.dat.V4API?.getRecentMemberActivities) {
 			return []
 		}
-		return this.dat.V4API.getRecentMemberActivities(memberIds, sinceMs)
+		try {
+			return await this.dat.V4API.getRecentMemberActivities(memberIds, sinceMs)
+		} catch (error) {
+			if ([400, 401, 403].includes(error.status) && !this.fallbackMemberActivityFailedLogged) {
+				this.fallbackMemberActivityFailedLogged = true
+				log.warn("Per-member activity fallback unavailable", { message: error.message })
+			}
+			throw error
+		}
 	}
 
 	async processFallbackActivityItems(items) {
@@ -560,6 +591,10 @@ class NotificationRouter {
 	}
 
 	async pollTeamActivityFallback() {
+		if (this.dat.V4API?.isAuthBlocked?.()) {
+			this.lastFallbackError = "HTB OAuth auth blocked — run `seven htb token set <refresh>`"
+			return
+		}
 		this.lastFallbackPollAt = new Date().toISOString()
 		try {
 			const lookbackMs = Math.max(this.config.fallbackPollMs, 15 * 60 * 1000)
