@@ -5,6 +5,7 @@ docker-compose.override.yml
 .vs/
 .vscode/
 logs/
+data/sevenbot-logs/
 desktop.ini
 .history/*
 .history/

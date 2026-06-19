@@ -523,35 +523,22 @@ class NotificationRouter {
 
 	async fetchRecentMemberActivity(sinceMs) {
 		const teamId = this.getTeamId?.()
-		if (teamId && this.dat.V4API?.getRecentTeamActivityForFallback) {
-			try {
-				return await this.dat.V4API.getRecentTeamActivityForFallback(teamId, sinceMs)
-			} catch (error) {
-				if ([400, 401, 403].includes(error.status)) {
-					if (!this.fallbackTeamActivityFailedLogged) {
-						this.fallbackTeamActivityFailedLogged = true
-						log.warn("Team activity fallback unavailable", {
-							teamId,
-							status: error.status,
-							message: error.message,
-						})
-					}
-				} else {
-					throw error
-				}
-			}
-		}
-
-		const memberIds = Object.keys(this.dat.TEAM_MEMBERS || {}).map(Number)
-		if (!memberIds.length || !this.dat.V4API?.getRecentMemberActivities) {
+		if (!teamId || !this.dat.V4API?.getRecentTeamActivityForFallback) {
 			return []
 		}
 		try {
-			return await this.dat.V4API.getRecentMemberActivities(memberIds, sinceMs)
+			return await this.dat.V4API.getRecentTeamActivityForFallback(teamId, sinceMs)
 		} catch (error) {
-			if ([400, 401, 403].includes(error.status) && !this.fallbackMemberActivityFailedLogged) {
-				this.fallbackMemberActivityFailedLogged = true
-				log.warn("Per-member activity fallback unavailable", { message: error.message })
+			if ([400, 401, 403].includes(error.status)) {
+				if (!this.fallbackTeamActivityFailedLogged) {
+					this.fallbackTeamActivityFailedLogged = true
+					log.warn("Team activity fallback unavailable", {
+						teamId,
+						status: error.status,
+						message: error.message,
+					})
+				}
+				return []
 			}
 			throw error
 		}

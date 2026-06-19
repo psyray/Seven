@@ -412,6 +412,22 @@ class HtbSyncEngine {
 		return Date.now() - new Date(updatedAt).getTime() > TEAM_STATS_REFRESH_MS
 	}
 
+	async refreshTeamMemberProfiles(membersBase) {
+		const oldMembers = this.ds.TEAM_MEMBERS || {}
+		const profiles = await this.api.getCompleteMemberProfilesByMemberPartials(membersBase)
+		for (const id of Object.keys(profiles)) {
+			const prev = oldMembers[id]
+			if (prev?.activity?.length) {
+				profiles[id].activity = prev.activity
+			}
+		}
+		const teamId = Number(process.env.HTB_TEAM_ID)
+		if (teamId) {
+			await this.api.hydrateMemberActivityFromTeamActivity(teamId, profiles)
+		}
+		return profiles
+	}
+
 	async syncTeam({ full = false, force = false, delta = false } = {}) {
 		const shouldRefreshTeamStats = this.teamStatsNeedRefresh(full)
 		const shouldRefreshAllMembers = full || force
@@ -425,12 +441,12 @@ class HtbSyncEngine {
 			}
 			const membersBase = await this.api.getTeamMembers(process.env.HTB_TEAM_ID, ignored)
 			if (shouldRefreshAllMembers) {
-				this.ds.TEAM_MEMBERS = await this.api.getCompleteMemberProfilesByMemberPartials(membersBase)
+				this.ds.TEAM_MEMBERS = await this.refreshTeamMemberProfiles(membersBase)
 			} else {
 				const newMembers = membersBase.filter(member => !this.ds.TEAM_MEMBERS?.[member.id])
 				if (newMembers.length) {
 					log.info("Fetching new team member profiles", { count: newMembers.length })
-					const profiles = await this.api.getCompleteMemberProfilesByMemberPartials(newMembers)
+					const profiles = await this.refreshTeamMemberProfiles(newMembers)
 					this.ds.TEAM_MEMBERS = Object.assign({}, this.ds.TEAM_MEMBERS || {}, profiles)
 				} else if (delta || !this.hasCachedObject(this.ds.TEAM_MEMBERS)) {
 					log.info("No new team members to fetch")
@@ -439,11 +455,11 @@ class HtbSyncEngine {
 		} else if (process.env.HTB_UNIVERSITY_ID) {
 			const membersBase = await this.api.getUniversityMembers(process.env.HTB_UNIVERSITY_ID, ignored)
 			if (shouldRefreshAllMembers || !this.hasCachedObject(this.ds.TEAM_MEMBERS)) {
-				this.ds.TEAM_MEMBERS = await this.api.getCompleteMemberProfilesByMemberPartials(membersBase)
+				this.ds.TEAM_MEMBERS = await this.refreshTeamMemberProfiles(membersBase)
 			} else {
 				const newMembers = membersBase.filter(member => !this.ds.TEAM_MEMBERS?.[member.id])
 				if (newMembers.length) {
-					const profiles = await this.api.getCompleteMemberProfilesByMemberPartials(newMembers)
+					const profiles = await this.refreshTeamMemberProfiles(newMembers)
 					this.ds.TEAM_MEMBERS = Object.assign({}, this.ds.TEAM_MEMBERS || {}, profiles)
 				}
 			}

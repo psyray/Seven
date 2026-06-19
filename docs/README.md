@@ -64,7 +64,7 @@ Regenerate after code changes: `npm run doc:generate`
 |------|---------|
 | **OAuth** | Access + refresh tokens; auto-refresh; `HTB_TOKEN_FILE` + `.env` sync; `seven htb token set` / `status` / `refresh`; captain DM on auth failure |
 | **Pusher** | `NotificationRouter` — queue, filters, `@mentions`, fallback poll, reconnect catch-up, channel resubscribe |
-| **Fallback API** | `getRecentMemberActivities()` per member (not `team/activity`); poll always active |
+| **Fallback API** | `getRecentTeamActivityForFallback()` via `team/activity`; poll always active |
 | **Persistence** | `seven_notification_events` table; captain `pusher history` / `pusher repost` |
 | **Dev** | `PUSHER_MSG_LOG.json` under `LOG_DIR`; `npm run test:pusher` |
 | **API** | `isOptionalMemberProfilePath()` — tolerate 404 on optional member endpoints |

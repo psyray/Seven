@@ -19,7 +19,7 @@ Token: `HTB_V4_TOKEN` (OAuth access JWT) + `HTB_REFRESH_TOKEN` (refresh). Auto-r
 
 Member profile 404 on optional paths: `isOptionalMemberProfilePath()` — swallow, don't fail bulk sync.
 
-Pusher fallback: `getRecentMemberActivities(memberIds, sinceMs)` — per-member `user/profile/activity`, not `team/activity`.
+Pusher fallback: `getRecentTeamActivityForFallback(teamId, sinceMs)` — single `team/activity` call (HTB removed per-user `user/profile/activity` in June 2026).
 
 ## htb-api.js patterns
 

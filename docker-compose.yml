@@ -1,5 +1,7 @@
 # POSTGRES_PASSWORD is applied only on first init of volume seven_pgdata.
 # Changing .env later does not update an existing DB — run: npm run docker:reset-db
+# Logs + HTB_TOKEN_FILE: bind-mount ./data/sevenbot-logs (run npm run docker:init-data once)
+# OAuth .env sync: bind-mount ./.env → /config/seven.env (same uid 1000 write access)
 services:
   postgres:
     image: postgres:16-alpine
@@ -43,8 +45,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    user: "1000:1000"
     volumes:
-      - seven_logs:/var/log/sevenbot
+      - ./data/sevenbot-logs:/var/log/sevenbot:rw
       - ./.env:/config/seven.env:rw
     networks:
       - seven_net
@@ -69,4 +72,3 @@ networks:
 
 volumes:
   seven_pgdata:
-  seven_logs:

@@ -50,7 +50,9 @@ On-demand: `ensureTarget()` — Pusher + `resolveEntWithEnsure`; never full-sect
 |------|-------------|-------|
 | Machine list | v5 | Paginated, `machines?...` |
 | Machine profiles | v4 | Selective enrichment for retired/owned; on-demand via `machine/profile/{name}` |
-| Member activity (Pusher fallback) | v4 | `user/profile/activity/{id}` — **not** `team/activity` (401 on OAuth) |
+| Member activity | v4 | Hybrid: Postgres + Pusher + `team/activity` hydrate on sync + `machine/activity` / `challenge/activity` on demand |
+| Member blood counts | v4 | `user/profile/basic/{id}` — `user_bloods`, `system_bloods`, `challenge_bloods` |
+| Team respects | v4 | `team/info/{id}` — field `respects` (replaces removed `team/graph`) |
 | Challenges | v4 | List + per-id `challenge/info/{id}` |
 | Team/members | v4 | Delta: new members only in hourly sync |
 | Fortresses/endgames/prolabs | v4 | List + per-id complete fetchers in `htb-api.js` | Pro labs: `GET prolabs` → `data.labs`; entries may be `mini: true` |
@@ -82,6 +84,7 @@ DAT.DISCORD_LINKS     // Discord ↔ HTB associations
 - HTB v3 session/cookie authentication
 - App Token without refresh (`app.hackthebox.com` static tokens)
 - Password-based token refresh / Turnstile login in bot
+- `user/profile/activity/{id}`, `user/profile/bloods/{id}`, `team/graph/{id}` bulk sync (removed by HTB June 2026)
 - `HTB_LEGACY_*`, `HTB_AUTH_*`, `HTB_SERVICE_*`
 - `.env_sample` template (use `.env.docker.example`)
 - Monolithic full-catalog re-fetch on every `force update` (replaced by delta sync)

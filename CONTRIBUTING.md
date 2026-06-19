@@ -114,7 +114,7 @@ Seven uses **OAuth access + refresh tokens** on the v4 API (`HTB_V4_TOKEN` + `HT
 
 - Machine **lists** come from **v5** (`modules/htb-api.js` → `getMachinesV5()`).
 - Machine **profiles** are enriched via **v4** selectively (retired or owned machines).
-- Pusher **fallback** uses `user/profile/activity/{id}` — not `team/activity`.
+- Pusher **fallback** uses `team/activity/{teamId}` via `getRecentTeamActivityForFallback()` — HTB removed per-user `user/profile/activity` (June 2026).
 - Sync orchestration lives in `models/SevenDatastore.js`.
 
 Do **not** reintroduce legacy connectors or `HTB_LEGACY_*` variables.

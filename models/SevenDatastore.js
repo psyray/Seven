@@ -28,7 +28,7 @@ const {
 
 const { HtbSpecialFlag } = require("../helpers/classes.js")
 const fs = require("fs")
-const { HtbApiConnector: V4 } = require("../modules/htb-api.js")
+const { HtbApiConnector: V4, mergeActivityEntry } = require("../modules/htb-api.js")
 const dFlowEnt = require("../helpers/dflow")
 const { Helpers: H } = require("../helpers/helpers.js")
 const { createLogger } = require("../helpers/logger.js")
@@ -51,6 +51,7 @@ class SevenDatastore {
 		this.MISC = {}
 		this.CHALLENGES = {}
 		this.DISCORD_LINKS = {}
+		this._targetActivityCacheAt = {}
 		this.syncEngine = new HtbSyncEngine(this, this.V4API)
 	}
 
@@ -1013,10 +1014,11 @@ class SevenDatastore {
 		if (member && target) {
 			// console.log(member)
 			var validOwns = []
+			const activity = member.activity || []
 			switch (target.type) {
 				case "machine":
 				case "challenge":
-					validOwns = member.activity
+					validOwns = activity
 						.filter(
 							(own) =>
 								own.object_type == target.type &&
@@ -1032,7 +1034,7 @@ class SevenDatastore {
 						validOwns = this.buildLabProgressOwns(member, target, progressEntry)
 						break
 					}
-					validOwns = member.activity
+					validOwns = activity
 						.filter(
 							(own) =>
 								own.object_type == target.type &&
@@ -1044,7 +1046,7 @@ class SevenDatastore {
 					break
 				}
 				case "flag":
-					validOwns = member.activity
+					validOwns = activity
 						.filter(
 							(own) =>
 								own.object_type == target.parent.type &&
@@ -1092,9 +1094,10 @@ class SevenDatastore {
 		const member = this.getMemberById(memberId)
 		if (!member) return []
 		// console.log(member)
+		const activity = member.activity || []
 		var owns = targetType
-			? [...member.activity].filter((e) => e.object_type == targetType)
-			: [...member.activity]
+			? [...activity].filter((e) => e.object_type == targetType)
+			: [...activity]
 		const filteredOwns = process(owns, sortOrder, sortBy, limit)
 		return filteredOwns || []
 	}
@@ -1137,6 +1140,31 @@ class SevenDatastore {
 		return !teamOwns.length ? null : teamOwns
 	}
 
+	/**
+	 * Fetch machine/challenge activity from HTB when team cache has no owns for a target.
+	 * @param {import('../models/api-classes').Machine|import('../models/api-classes').Challenge} target
+	 */
+	async ensureTargetActivityCached(target) {
+		if (!target?.id || !["machine", "challenge"].includes(target.type)) return
+		const cacheKey = `${target.type}:${target.id}`
+		const ttlMs = 3600000
+		const cachedAt = this._targetActivityCacheAt[cacheKey]
+		if (cachedAt && Date.now() - cachedAt < ttlMs) return
+
+		if (this.getTeamOwnsForTarget(target)?.length) {
+			this._targetActivityCacheAt[cacheKey] = Date.now()
+			return
+		}
+
+		const memberIds = Object.keys(this.TEAM_MEMBERS || {}).map(Number)
+		const items = await this.V4API.getTargetActivityForTeam(target, memberIds)
+		for (const { uid, entry } of items) {
+			const member = this.getMemberById(uid)
+			if (member) mergeActivityEntry(member, entry)
+		}
+		this._targetActivityCacheAt[cacheKey] = Date.now()
+	}
+
 	filterTeamOwns(
 		memberId,
 		targetType = null,
@@ -1160,9 +1188,11 @@ class SevenDatastore {
 			}
 		}
 		const member = this.getMemberById(memberId)
+		if (!member) return null
+		const activity = member.activity || []
 		var owns = targetType
-			? [...member.activity].filter((e) => e.object_type == targetType)
-			: [...member.activity]
+			? [...activity].filter((e) => e.object_type == targetType)
+			: [...activity]
 		const filteredOwns = process(owns, sortOrder, sortBy, limit)
 		return filteredOwns || null
 	}
@@ -1464,6 +1494,7 @@ class SevenDatastore {
 		var target = this.resolveEnt(targetName, type)
 		var entriesAffected = false
 		if (member && target) {
+			if (!Array.isArray(member.activity)) member.activity = []
 			console.log(
 				`[PUSHER INTEGRATION]::: Resolved member ${member.name} [${member.id}] and target ${target.name} [${target.type}]`
 			)

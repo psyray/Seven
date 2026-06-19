@@ -26,7 +26,7 @@ Flow: `helpers/pusher-htb.js` (parse HTML) → `helpers/notification-router.js` 
 
 - Pusher subscribes at startup (before Discord `ready`); pending announces queue until channel is fetched
 - Own filter: team member **or** first blood **or** linked Discord account
-- Fallback: `getRecentMemberActivities()` when Pusher unhealthy (`PUSHER_FALLBACK_POLL_MS`); poll also runs while healthy
+- Fallback: `getRecentTeamActivityForFallback()` when Pusher unhealthy (`PUSHER_FALLBACK_POLL_MS`); poll also runs while healthy
 - Persist: `NotificationRouter.recordEvent()` → `NotificationStore.append()` (all paths incl. skipped)
 - Boot: `importDbBackup()` → `NOTIFICATION_STORE.ensureSchema()` → `NOTIFICATION_ROUTER.initFromStore()`
 - Admin: `admin.pusherStatus` / `seven pusher status` (connection + 25-item memory buffer)

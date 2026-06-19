@@ -1275,7 +1275,12 @@ async function handleMessage(message) {
 							SEND.embed(message, await EGI.infoFor(P.targetType, targetName))
 							break
 						}
-						case "getTargetOwners": SEND.embed(message, EGI.teamOwnsForTarget(DAT.resolveEnt(P.target, P.htbTargetType), undefined, P.ownType, P.ownFilter)); break
+						case "getTargetOwners": {
+							const target = DAT.resolveEnt(P.target, P.htbTargetType)
+							await DAT.ensureTargetActivityCached(target)
+							SEND.embed(message, EGI.teamOwnsForTarget(target, undefined, P.ownType, P.ownFilter))
+							break
+						}
 						case "checkMemberOwnedTarget": SEND.embed(message, EGI.checkMemberOwnedTarget(DAT.resolveEnt(P.username, "member", false, message), DAT.resolveEnt(P.targetname, P.targettype), P.flagNames)); break
 						case "getFirstBox": SEND.embed(message, await EGI.infoFor("machine", "Lame")); await SEND.human(message, result.fulfillmentText); break
 						case "agent.doReboot": await doFakeReboot(message, result.fulfillmentText); break

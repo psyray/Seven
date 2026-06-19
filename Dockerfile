@@ -18,16 +18,16 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
 
 WORKDIR /app
 
-RUN addgroup --system seven && adduser --system --ingroup seven seven \
-  && mkdir -p /var/log/sevenbot \
-  && chown seven:seven /app /var/log/sevenbot
+# node:20-bookworm-slim ships uid/gid 1000 — matches host .env bind-mount and ./data/sevenbot-logs
+RUN mkdir -p /var/log/sevenbot \
+  && chown -R node:node /app /var/log/sevenbot
 
-COPY --chown=seven:seven package*.json ./
-USER seven
+COPY --chown=node:node package*.json ./
+USER node
 RUN npm ci --omit=dev
 
-COPY --chown=seven:seven config/htb.js ./config/htb.js
-COPY --chown=seven:seven . .
+COPY --chown=node:node config/htb.js ./config/htb.js
+COPY --chown=node:node . .
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "bot.js"]

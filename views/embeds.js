@@ -150,14 +150,12 @@ class HtbEmbeds {
 		case "member": {
 			/** TEAM MEMBER EMBED CONSTRUCTOR **/
 			const { id, name, rank, rank_text, points, ranking, rank_id, next_rank, respects, team, avatar, country_code: nat, country_name,
-				endgames, fortresses, prolabs, bloods, user_owns: users, system_owns: roots, challenge_owns, current_rank_progress: rankProgress,
-				user_bloods, system_bloods, description, university_name: uni, website, github, linkedin, twitter } = target
+				endgames, fortresses, prolabs, user_owns: users, system_owns: roots, challenge_owns, current_rank_progress: rankProgress,
+				user_bloods, system_bloods, challenge_bloods, description, university_name: uni, website, github, linkedin, twitter } = target
 
 			const challs = H.sAcc(challenge_owns, "solved", null) || 0
-			const challenge_bloods = H.sAcc(bloods, "challenges", "length")
-			const machine_bloods = H.sAcc(bloods, "machines", "length")
 			const hasOwns = (roots + users + challs > 0)
-			const hasBloods = ((challenge_bloods || 0) + (machine_bloods || 0) > 0)
+			const hasBloods = (user_bloods || 0) + (system_bloods || 0) + (challenge_bloods || 0) > 0
 			const hasRespect = Boolean(respects)
 
 			embed.setAuthor(this.ds.tryDiscordifyUid(id, target.self) || target.name + "  " + F.rankSymbol(rank),

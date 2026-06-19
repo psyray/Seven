@@ -130,18 +130,40 @@ Table `seven_data`: JSON columns per entity type.
 
 Table `seven_notification_events`: Pusher/fallback event log (see [pusher-events.md](pusher-events.md)).
 
+## Removed endpoints (June 2026) and replacements
+
+| Removed | Replacement in Seven |
+|---------|---------------------|
+| `GET user/profile/bloods/{id}` | `user/profile/basic/{id}` — `user_bloods`, `system_bloods`, `challenge_bloods` |
+| `GET user/profile/activity/{id}` | Hybrid: Postgres cache + Pusher + `team/activity` hydrate on sync + `machine/activity` / `challenge/activity` on demand |
+| `GET team/graph/{id}` | `team/info/{id}` — field `respects` |
+
 ## Optional member profile paths
 
-Some v4 member sub-endpoints return 404 for members without optional data (e.g. certain lab progress). `isOptionalMemberProfilePath()` in `htb-api.js` treats these as empty instead of failing bulk member sync.
+`isOptionalMemberProfilePath()` treats these as empty instead of failing bulk member sync:
+
+- `user/profile/progress/endgame/`, `user/profile/progress/machines/os/` — 404 when no progress
+
+`team/activity/` may return 401 with OAuth — treated as optional empty (one WARN per process).
+
+## Member activity sources
+
+After HTB removed per-user activity, `member.activity` is built from:
+
+1. **Postgres backup** — preserved across team profile refresh
+2. **Pusher** — `integratePusherOwn()` on live owns
+3. **Team sync** — `hydrateMemberActivityFromTeamActivity()` (90 days via `team/activity`)
+4. **On demand** — `ensureTargetActivityCached()` calls `machine/activity/{id}` or `challenge/activity/{id}` when a owns query finds no cache hit
+
+Blood counts in member embeds use basic profile fields, not the removed bloods list endpoint.
 
 ## Real-time notifications (fallback API)
 
-When Pusher is unhealthy, `NotificationRouter` polls team activity via:
+When Pusher is unhealthy, `NotificationRouter` polls:
 
-- **Primary:** `GET team/activity/{teamId}?n_past_days=N` through `HtbApiConnector.getRecentTeamActivityForFallback()` (includes `user.id` per entry)
-- **Legacy fallback:** `user/profile/activity/{memberId}` — returns 400 on current HTB API; treated as optional empty
+- **Primary:** `GET team/activity/{teamId}?n_past_days=N` via `getRecentTeamActivityForFallback()` (includes `user.id` per entry)
 
-`team/graph` for team respects is optional (400/404 → skip). Used for catch-up after sustained Pusher disconnect (≥15s) and periodic fallback (`PUSHER_FALLBACK_POLL_MS`, **always active**). Live owns still come primarily from Pusher (`helpers/pusher-htb.js`).
+Used for catch-up after sustained Pusher disconnect (≥15s) and periodic fallback (`PUSHER_FALLBACK_POLL_MS`, **always active**). Live owns still come primarily from Pusher (`helpers/pusher-htb.js`).
 
 ### Pro lab catalog notes
 

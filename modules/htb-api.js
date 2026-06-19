@@ -182,8 +182,16 @@ async function fetchOptionalList(api, endpointPath, label) {
 const OPTIONAL_MEMBER_PROFILE_PATH_PREFIXES = [
 	"user/profile/progress/endgame/",
 	"user/profile/progress/machines/os/",
-	"user/profile/activity/",
 ]
+
+/** GET endpoints removed or unreliable — return empty data instead of failing sync. */
+const OPTIONAL_GET_ENDPOINT_PREFIXES = [
+	"team/activity/",
+]
+
+const TEAM_ACTIVITY_HYDRATE_DAYS = 90
+
+const loggedOptionalEndpointKeys = new Set()
 
 function extractHtbErrorBody(response) {
 	const body = response?.body || {}
@@ -193,6 +201,9 @@ function extractHtbErrorBody(response) {
 }
 
 function logHtb400Once(endpointPath, response) {
+	if (isOptionalMemberProfilePath(endpointPath) || isOptionalGetEndpoint(endpointPath)) {
+		return
+	}
 	const key = getThrottleEndpointKey(endpointPath)
 	if (loggedHtb400EndpointKeys.has(key)) return
 	loggedHtb400EndpointKeys.add(key)
@@ -201,10 +212,23 @@ function logHtb400Once(endpointPath, response) {
 	})
 }
 
-function extractMemberActivityFromResponse(res) {
-	const profile = res?.profile || res?.message?.profile || res?.data?.profile || res?.message
-	const activity = profile?.activity || res?.activity || res?.message?.activity || res?.data?.activity
-	return Array.isArray(activity) ? activity : []
+function optionalEndpointLogKey(endpointPath) {
+	if (endpointPath.startsWith("team/activity/")) return "team/activity"
+	return getThrottleEndpointKey(endpointPath)
+}
+
+function logOptionalEndpointRemovedOnce(endpointPath, status, response) {
+	const key = optionalEndpointLogKey(endpointPath)
+	if (loggedOptionalEndpointKeys.has(key)) return
+	loggedOptionalEndpointKeys.add(key)
+	log.warn(`HTB endpoint removed or unavailable (${status}) — continuing without ${key}`, {
+		endpoint: key,
+		body: extractHtbErrorBody(response),
+	})
+}
+
+function extractTargetActivityItems(res) {
+	return extractTeamActivityItems(res)
 }
 
 function parseActivityTimestamp(entry) {
@@ -225,6 +249,81 @@ function nPastDaysFromSinceMs(sinceMs) {
 
 function isOptionalMemberProfilePath(endpointPath) {
 	return OPTIONAL_MEMBER_PROFILE_PATH_PREFIXES.some(prefix => endpointPath.startsWith(prefix))
+}
+
+function isOptionalGetEndpoint(endpointPath) {
+	return OPTIONAL_GET_ENDPOINT_PREFIXES.some(prefix => endpointPath.startsWith(prefix))
+}
+
+function optionalMemberProfileFallback() {
+	return { profile: {} }
+}
+
+function optionalGetEndpointFallback(endpointPath) {
+	if (endpointPath.startsWith("team/activity/")) {
+		return []
+	}
+	return null
+}
+
+function teamActivityItemToMemberEntry(entry) {
+	const objectType = String(entry.object_type || "").toLowerCase()
+	if (!objectType || !entry.name) return null
+	let ownType = entry.type || objectType
+	if (objectType === "machine") {
+		ownType = String(entry.type || "").toLowerCase() === "root" ? "root" : "user"
+	}
+	return {
+		date: entry.date,
+		date_diff: entry.date_diff || null,
+		object_type: objectType,
+		type: ownType,
+		name: entry.name,
+		id: entry.id ?? null,
+		flag_title: entry.flag_title || null,
+		points: entry.points || 0,
+		first_blood: Boolean(entry.first_blood),
+		machine_avatar: entry.machine_avatar || null,
+	}
+}
+
+function activityEntryExists(member, entry) {
+	if (!Array.isArray(member?.activity) || !entry) return false
+	const objectType = entry.object_type
+	if (objectType === "machine") {
+		return member.activity.some((own) =>
+			own.object_type === "machine"
+			&& own.type === entry.type
+			&& (own.name === entry.name || (entry.id != null && own.id == entry.id))
+		)
+	}
+	if (objectType === "challenge") {
+		return member.activity.some((own) =>
+			own.object_type === "challenge"
+			&& (own.name === entry.name || (entry.id != null && own.id == entry.id))
+			&& (!entry.flag_title || own.flag_title === entry.flag_title)
+		)
+	}
+	return member.activity.some((own) =>
+		own.object_type === objectType
+		&& (own.name === entry.name || (entry.id != null && own.id == entry.id))
+		&& (!entry.flag_title || !own.flag_title || own.flag_title === entry.flag_title)
+	)
+}
+
+function mergeActivityEntry(member, entry) {
+	if (!entry) return false
+	if (!Array.isArray(member.activity)) member.activity = []
+	if (activityEntryExists(member, entry)) return false
+	member.activity.push(entry)
+	return true
+}
+
+function finalizeMemberProfile(results, partial = null) {
+	const profiles = results.map((e) => e?.profile || {})
+	const merged = partial ? H.combine([partial, ...profiles]) : H.combine(profiles)
+	if (!Array.isArray(merged.activity)) merged.activity = []
+	return merged
 }
 
 function loadOAuthTokensFromFile(filePath) {
@@ -265,7 +364,7 @@ class HtbApiConnector {
 		this.throttles = {}
 		this.rateLimitBuckets = {}
 		this.tokenExpiryWarned = false
-		this._profileActivity400Logged = false
+		this._optionalGetEndpointLogged = new Set()
 		this.throttle = new Throttle({
 			active: true,
 			rate: 25,
@@ -667,6 +766,11 @@ class HtbApiConnector {
 		try {
 			return await this._htbApiGetOnce(endpointPath, parseText, options)
 		} catch (error) {
+			if ([400, 401, 403].includes(error.status) && isOptionalGetEndpoint(endpointPath)) {
+				this.logOptionalGetEndpointOnce(endpointPath, error.status)
+				const fallback = optionalGetEndpointFallback(endpointPath)
+				if (fallback != null) return fallback
+			}
 			if (error.status !== 401) {
 				throw error
 			}
@@ -755,23 +859,35 @@ class HtbApiConnector {
 						rateLimitRemaining: rLeft,
 						rateLimitMax: rLimit,
 					}
-					if (VERBOSE_API_REQUESTS) {
-						log.info(`GET ${endpointPath}`, requestMeta)
-					} else {
-						log.debug(`GET ${endpointPath}`, requestMeta)
+					const optionalError = response.status >= 400
+						&& (
+							((response.status === 404 || response.status === 400) && isOptionalMemberProfilePath(endpointPath))
+							|| ((response.status === 404 || response.status === 400) && isOptionalGetEndpoint(endpointPath))
+						)
+
+					if (!optionalError) {
+						if (VERBOSE_API_REQUESTS) {
+							log.info(`GET ${endpointPath}`, requestMeta)
+						} else {
+							log.debug(`GET ${endpointPath}`, requestMeta)
+						}
 					}
 
 					if (response.status >= 400) {
+						if (optionalError) {
+							logOptionalEndpointRemovedOnce(endpointPath, response.status, response)
+							if (isOptionalMemberProfilePath(endpointPath)) {
+								return resolve(optionalMemberProfileFallback(endpointPath))
+							}
+							const fallback = optionalGetEndpointFallback(endpointPath)
+							if (fallback != null) return resolve(fallback)
+						}
 						if (response.status === 400) {
 							logHtb400Once(endpointPath, response)
 						}
 						const err = new Error(`HTTP ${response.status} for ${endpointPath}`)
 						err.status = response.status
 						err.response = response
-						if ((response.status === 404 || response.status === 400) && isOptionalMemberProfilePath(endpointPath)) {
-							log.debug(`Optional member profile endpoint unavailable (${response.status})`, { endpoint: endpointPath })
-							return resolve({ profile: { activity: [] } })
-						}
 						return reject(err)
 					}
 
@@ -1266,19 +1382,9 @@ class HtbApiConnector {
 	}
 
 	getCompleteTeamProfile(teamId) {
-		const respectsPromise = this.getTeamStatsGraphForDuration(teamId, "1W")
-			.then(res => ({ respects: res.respect?.pop?.() ?? null }))
-			.catch(error => {
-				if (error.status === 400 || error.status === 404) {
-					log.warn("team/graph unavailable — skipping respects", { teamId, status: error.status })
-					return { respects: null }
-				}
-				throw error
-			})
 		return Promise.all([
 			this.getTeamProfile(teamId),
 			this.getTeamOwnStats(teamId),
-			respectsPromise,
 		]).then(res => H.combine([...res, { type: "team" }]))
 	}
 
@@ -1331,52 +1437,53 @@ class HtbApiConnector {
 	}
 
 	/**
-	 * Fetch recent activity for team members via user/profile/activity (legacy fallback).
-	 * Prefer getRecentTeamActivityForFallback when team/activity is available.
-	 * @param {number[]} memberIds
-	 * @param {number|null} sinceMs
+	 * Seed member.activity from team/activity (replaces removed user/profile/activity bulk sync).
+	 * @param {number} teamId
+	 * @param {Object<number, object>} membersMap
+	 * @param {{ nPastDays?: number }} [options]
+	 * @returns {Promise<{ merged: number, skipped: number }>}
 	 */
-	async getRecentMemberActivities(memberIds, sinceMs = null) {
-		if (!memberIds?.length) return []
-		const results = await Promise.all(memberIds.map(async (id) => {
-			try {
-				const res = await this.getMemberActivity(id)
-				const activity = extractMemberActivityFromResponse(res)
-				return { id: Number(id), activity }
-			} catch (error) {
-				if (error.status === 401 || error.status === 403) {
-					error.endpoint = `user/profile/activity/${id}`
-					throw error
-				}
-				if (error.status === 400 && !this._profileActivity400Logged) {
-					this._profileActivity400Logged = true
-					log.warn("user/profile/activity unavailable (400) — per-member fallback returning empty", {
-						endpoint: "user/profile/activity",
-					})
-				}
-				return { id: Number(id), activity: [] }
-			}
-		}))
-
-		const items = []
-		for (const { id, activity } of results) {
-			for (const entry of activity) {
-				const ts = parseActivityTimestamp(entry)
-				if (sinceMs) {
-					if (Number.isFinite(ts)) {
-						if (ts <= sinceMs) continue
-					} else {
-						log.debug("Activity entry has no parseable date — including in fallback scan", {
-							memberId: id,
-							name: entry?.name,
-							object_type: entry?.object_type,
-						})
-					}
-				}
-				items.push({ ...entry, user_id: id, _activityTs: Number.isFinite(ts) ? ts : Date.now() })
-			}
+	async hydrateMemberActivityFromTeamActivity(teamId, membersMap, { nPastDays = TEAM_ACTIVITY_HYDRATE_DAYS } = {}) {
+		if (!teamId || !membersMap || !Object.keys(membersMap).length) {
+			return { merged: 0, skipped: 0 }
 		}
-		return items.sort((a, b) => b._activityTs - a._activityTs)
+		const sinceMs = Date.now() - (nPastDays * 86400000)
+		let items = []
+		try {
+			items = await this.getRecentTeamActivityForFallback(teamId, sinceMs)
+		} catch (error) {
+			if ([400, 401, 403].includes(error.status)) {
+				log.warn("Team activity hydrate skipped — endpoint unavailable", {
+					teamId,
+					status: error.status,
+					message: error.message,
+				})
+				return { merged: 0, skipped: 0 }
+			}
+			throw error
+		}
+
+		let merged = 0
+		let skipped = 0
+		for (const item of items) {
+			const uid = Number(item.user_id ?? item.user?.id)
+			const member = membersMap[uid]
+			if (!member) {
+				skipped++
+				continue
+			}
+			const entry = teamActivityItemToMemberEntry(item)
+			if (!entry) {
+				skipped++
+				continue
+			}
+			if (mergeActivityEntry(member, entry)) merged++
+			else skipped++
+		}
+		if (merged) {
+			log.info("Hydrated member activity from team/activity", { merged, skipped, teamId })
+		}
+		return { merged, skipped }
 	}
 
 	getTeamOwnStats(teamId) {
@@ -1387,8 +1494,45 @@ class HtbApiConnector {
 		return this.htbApiGet(`team/chart/machines/attack/${teamId}`)
 	}
 
-	getTeamStatsGraphForDuration(teamId, duration = "1Y") {
-		return this.htbApiGet(`team/graph/${teamId}?duration=${duration}`).then(res => res.data)
+	getMachineActivity(machineId) {
+		return this.htbApiGet(`machine/activity/${machineId}`)
+	}
+
+	getChallengeActivity(challengeId) {
+		return this.htbApiGet(`challenge/activity/${challengeId}`)
+	}
+
+	async getTargetActivityForTeam(target, teamMemberIds) {
+		if (!target?.id || !["machine", "challenge"].includes(target.type)) return []
+		const memberSet = new Set((teamMemberIds || []).map(Number))
+		if (!memberSet.size) return []
+
+		const fetcher = target.type === "machine"
+			? () => this.getMachineActivity(target.id)
+			: () => this.getChallengeActivity(target.id)
+
+		try {
+			const res = await fetcher()
+			const items = extractTargetActivityItems(res)
+			const mapped = []
+			for (const item of items) {
+				const uid = Number(item.user?.id ?? item.user_id)
+				if (!memberSet.has(uid)) continue
+				const entry = teamActivityItemToMemberEntry(item)
+				if (entry) mapped.push({ uid, entry })
+			}
+			return mapped
+		} catch (error) {
+			if ([400, 401, 403, 404].includes(error.status)) {
+				log.warn("Target activity fetch unavailable", {
+					type: target.type,
+					id: target.id,
+					status: error.status,
+				})
+				return []
+			}
+			throw error
+		}
 	}
 
 	getSelfTeamRankHistory(period = "1Y") {
@@ -1449,35 +1593,23 @@ class HtbApiConnector {
 		if (!memberId) return null
 		return Promise.all([
 			this.getMemberProfile(memberId),
-			this.getMemberActivity(memberId),
 			this.getMemberMachineOsProgress(memberId),
 			this.getMemberChallengeProgress(memberId),
 			this.getMemberEndgameProgress(memberId),
 			this.getMemberFortressProgress(memberId),
 			this.getMemberProlabProgress(memberId),
-			this.getMemberBloods(memberId)
-		]).then((results) => H.combine(results.map(e => e?.profile || {})))
+		]).then((results) => finalizeMemberProfile(results))
 	}
 
 	getCompleteMemberProfileByMemberPartial(member) {
 		return Promise.all([
 			this.getMemberProfile(member.id),
-			this.getMemberActivity(member.id),
 			this.getMemberMachineOsProgress(member.id),
 			this.getMemberChallengeProgress(member.id),
 			this.getMemberEndgameProgress(member.id),
 			this.getMemberFortressProgress(member.id),
 			this.getMemberProlabProgress(member.id),
-			this.getMemberBloods(member.id)
-		]).then((results) => H.combine([
-			member,
-			...results.map(e => e?.profile || {}),
-		]))
-	}
-
-	getCompleteMemberProfilesByIds(memberIds) {
-		return Promise.all(memberIds.map(id => this.getCompleteMemberProfileById(id)))
-			.then(results => setTypeForValues("member", H.arrToObj(results, "id")))
+		]).then((results) => finalizeMemberProfile(results, member))
 	}
 
 	async getCompleteMemberProfilesByMemberPartials(members) {
@@ -1518,10 +1650,6 @@ class HtbApiConnector {
 		return this.htbApiGet(`user/profile/progress/prolab/${memberId}`)
 	}
 
-	getMemberBloods(memberId) {
-		return this.htbApiGet(`user/profile/bloods/${memberId}`)
-	}
-
 	getMachineAttackDataChart(memberId) {
 		return this.htbApiGet(`user/profile/chart/machines/attack/${memberId}`)
 	}
@@ -1533,19 +1661,6 @@ class HtbApiConnector {
 			TEAM_MEMBERS_TEMP[Number(memberProfile.profile.id)] = memberProfile.profile
 		})
 		return setTypeForValues("user", TEAM_MEMBERS_TEMP)
-	}
-
-	async getMemberActivities(memberIds) {
-		const results = await Promise.all(memberIds.map(id => this.htbApiGet("user/profile/activity/" + id)))
-		const TEAM_MEMBERS_ACTIVITIES = {}
-		results.forEach((memberProfile, idx) => {
-			TEAM_MEMBERS_ACTIVITIES[Number(memberIds[idx])] = memberProfile.profile.activity
-		})
-		return TEAM_MEMBERS_ACTIVITIES
-	}
-
-	async getMemberActivity(memberId) {
-		return this.htbApiGet("user/profile/activity/" + memberId)
 	}
 
 	getOAuthTokenStatus() {
@@ -1587,6 +1702,13 @@ class HtbApiConnector {
 		if (!payload?.exp) return true
 		return payload.exp < Math.floor(Date.now() / 1000) + TOKEN_EXPIRY_BUFFER_SEC
 	}
+
+	logOptionalGetEndpointOnce(endpointPath, status) {
+		const key = getThrottleEndpointKey(endpointPath)
+		if (this._optionalGetEndpointLogged.has(key)) return
+		this._optionalGetEndpointLogged.add(key)
+		log.warn(`Optional HTB endpoint unavailable (${status}) — returning empty`, { endpoint: endpointPath })
+	}
 }
 
 function parseJwt(token) {
@@ -1611,4 +1733,17 @@ module.exports = {
 	HtbAuthError,
 	parseJwt,
 	loadOAuthTokensFromFile,
+	mergeActivityEntry,
+	activityEntryExists,
+	teamActivityItemToMemberEntry,
+	__test__: {
+		optionalMemberProfileFallback,
+		isOptionalMemberProfilePath,
+		isOptionalGetEndpoint,
+		optionalGetEndpointFallback,
+		optionalEndpointLogKey,
+		teamActivityItemToMemberEntry,
+		activityEntryExists,
+		mergeActivityEntry,
+	},
 }

@@ -64,7 +64,9 @@ function enrichMemberProfile(member) {
 		fortresses: member.fortresses || [],
 		prolabs: member.prolabs || [],
 		challenge_owns: member.challenge_owns || { solved: 0 },
-		bloods: member.bloods || { machines: [], challenges: [] },
+		user_bloods: member.user_bloods || 0,
+		system_bloods: member.system_bloods || 0,
+		challenge_bloods: member.challenge_bloods || 0,
 	})
 }
 

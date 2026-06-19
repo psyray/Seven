@@ -137,7 +137,7 @@ Seven announces team owns (and global first blood) on `DISCORD_ANNOUNCE_CHAN_ID`
 | `PUSHER_ANNOUNCE_RESPECTS` | `false` | Respect notifications |
 | `PUSHER_ANNOUNCE_JOINS` | `false` | HTB account join notifications |
 | `PUSHER_DB_PERSIST_DEBOUNCE_MS` | `30000` | Delay before writing Pusher cache updates to Postgres |
-| `PUSHER_FALLBACK_POLL_MS` | `300000` | Poll `user/profile/activity` per team member (runs even when Pusher is healthy) |
+| `PUSHER_FALLBACK_POLL_MS` | `300000` | Poll `team/activity` for recent owns (runs even when Pusher is healthy) |
 
 **Troubleshooting:**
 

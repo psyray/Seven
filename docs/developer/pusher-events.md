@@ -31,7 +31,7 @@ HtbPusherSubscription [pusher-htb.js]
 |-----------|---------|
 | Announce queue | Buffers embeds until Discord channel is ready (`client.on("ready")`) |
 | `announcedOwnKeys` | In-memory dedup for fallback poll (not cleared by HTB cache refresh) |
-| Fallback poll | `getRecentMemberActivities()` every `PUSHER_FALLBACK_POLL_MS` (even when Pusher healthy) |
+| Fallback poll | `getRecentTeamActivityForFallback()` via `team/activity` every `PUSHER_FALLBACK_POLL_MS` (even when Pusher healthy) |
 | Reconnect catch-up | After Pusher down ≥15s, one-shot activity poll |
 | Channel resubscribe | On `disconnected → connected`, re-subscribes all Pusher channels |
 | Admin status | `seven pusher status` — connection, queue, fallback poll stats |
