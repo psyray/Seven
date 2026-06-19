@@ -78,19 +78,30 @@ function buildHelpPromptCatalog(role = "member", samples = DEFAULT_SAMPLES) {
 
 	for (const line of help.split("\n")) {
 		const match = line.match(lineRx)
-		if (!match) continue
-		const raw = (match[1] || "").trim()
-		if (!raw || raw.startsWith("#") || raw.includes("prefix with")) continue
+		const headerMatch = !match && line.match(/^#\s+.+"([^"]+)"/)
+		const raw = match
+			? (match[1] || "").trim()
+			: headerMatch
+				? headerMatch[1].trim()
+				: null
+		if (!raw) continue
+		if (raw.startsWith("#") || raw.includes("prefix with")) continue
 		if (/^(In DMs|Type an HTB|Just type|Works for|Names are|Link your|Achievements|Re-ask|Captains)/i.test(raw)) continue
-		if (!/"[^"]+"/.test(raw)) continue
+		if (!/"[^"]+"/.test(raw) && !headerMatch) continue
 
-		for (const prompt of extractPromptsFromHelpLine(raw, samples)) {
-			catalog.push({
-				id: `help-${role}-${++index}`,
-				prompt,
-				role,
-				source: "help",
-			})
+		const linesToExtract = headerMatch ? [raw] : [raw]
+		for (const extractRaw of linesToExtract) {
+			const prompts = headerMatch
+				? [substitutePlaceholders(extractRaw, samples)].filter(p => p.length >= 3)
+				: extractPromptsFromHelpLine(extractRaw, samples)
+			for (const prompt of prompts) {
+				catalog.push({
+					id: `help-${role}-${++index}`,
+					prompt,
+					role,
+					source: "help",
+				})
+			}
 		}
 	}
 

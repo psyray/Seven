@@ -46,7 +46,13 @@ function testLocalIntentRegressions() {
 		},
 		{
 			prompt: "psyray info",
-			expect: { intent: "getMemberInfo", username: "psyray" },
+			expect: { intent: "getTargetInfo", targetName: "psyray" },
+		},
+		{
+			prompt: "Cap info",
+			df: { intent: { displayName: "Default Fallback Intent" } },
+			params: {},
+			expect: { intent: "getTargetInfo", targetName: "Cap" },
 		},
 		{
 			prompt: "hardest machines",
@@ -78,10 +84,44 @@ function testLocalIntentRegressions() {
 			prompt: "htb token status",
 			expect: { intent: "admin.htbTokenStatus" },
 		},
+		{
+			prompt: "team info",
+			df: { intent: { displayName: "getTeamInfo" } },
+			params: {},
+			expect: { intent: "getTeamInfo" },
+		},
+		{
+			prompt: "team activity",
+			df: { intent: { displayName: "Default Fallback Intent" } },
+			params: {},
+			expect: { intent: "getTeamActivity" },
+		},
+		{
+			prompt: "Lame info",
+			df: { intent: { displayName: "getTargetInfo" } },
+			params: { targetType: "machine", targetName: "Lame" },
+			expectNotIntent: "getMemberInfo",
+		},
+		{
+			prompt: "team rank",
+			expect: { intent: "getTeamRanking" },
+		},
+		{
+			prompt: "reboot",
+			expect: { intent: "agent.doReboot" },
+		},
+		{
+			prompt: "clear cache",
+			expect: { intent: "admin.clearCached" },
+		},
 	]
 
 	for (const c of cases) {
 		const result = resolveLocalIntent(c.prompt, c.df || null, c.params || null)
+		if (c.expectNotIntent) {
+			assert(result?.intent !== c.expectNotIntent, `${c.prompt} must not → ${c.expectNotIntent}`)
+			continue
+		}
 		assert(result?.intent === c.expect.intent, `${c.prompt} → ${c.expect.intent}`)
 		if (c.expect.targetName) {
 			assert(result?.parameters?.targetName === c.expect.targetName, `${c.prompt} targetName`)
@@ -105,7 +145,7 @@ function testHelpExampleCoverage() {
 	for (const prompt of examples) {
 		const local = resolveLocalIntent(prompt)
 		const extracted = extractTargetNameFromMessage(prompt)
-		const ok = Boolean(local || extracted || /^(help|team info|what's new)/i.test(prompt))
+		const ok = Boolean(local || extracted || /^(help|what's new|Lame|Baby)$/i.test(prompt))
 		if (ok) covered++
 		assert(ok, `help example: "${prompt}"`, "no local intent — may need DialogFlow training")
 	}

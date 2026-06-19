@@ -3,28 +3,15 @@
  */
 
 const { resolveLocalIntent, extractTargetNameFromMessage } = require("./nlp.js")
+const { STATIC_PHRASE_MAP } = require("./intent-phrases.js")
 
 const SKIP_RX = [
-	/force update|refresh team data|clear cache/i,
 	/parrot on|parrot off|setup emoji|clear emoji|set status/i,
 	/forget|unlink|blacklist|remember me|unforget|purge data|stop tracking/i,
 	/^(In DMs|Type an HTB|Just type|Works for|Names are|Link your|Achievements|Re-ask|Captains)/i,
 	/Fortress, Endgame|Ask for info on any cached special/i,
 	/Bugs or ideas/i,
 ]
-
-const FILTER_TARGETS = (targettype, sortby, extra = {}) => ({
-	intent: "filterTargets",
-	parameters: {
-		targettype,
-		sortby: [sortby],
-		sortorder: sortby === "oldest" ? "asc" : "desc",
-		limit: 15,
-		memberName: [],
-		targetFilterBasis: [],
-		...extra,
-	},
-})
 
 /** @returns {"skip"|"run"|"df-only"} */
 function classifySmokePrompt(prompt) {
@@ -57,72 +44,29 @@ function resolveSmokeIntent(prompt, dat, message) {
 	}
 
 	if (lower === "my stats" || lower === "my rank") {
-		return { intent: "getMemberRank", parameters: { username: "i" }, route: "static" }
+		const entry = STATIC_PHRASE_MAP[lower]
+		if (entry && typeof entry !== "string") {
+			return { intent: entry.intent, parameters: entry.parameters, route: "static" }
+		}
 	}
 
-	const staticMap = {
-		"team info": "getTeamInfo",
-		"clk": "getTeamInfo",
-		"who are we": "getTeamInfo",
-		"team rank": "getTeamRanking",
-		"how are we doing": "getTeamRanking",
-		"team leaders": "getTeamLeaders",
-		"leaderboard": "getTeamLeaders",
-		"who's on top": "getTeamLeader",
-		"team leader": "getTeamLeader",
-		"flagboard": "getFlagboard",
-		"team badge": "getTeamBadge",
-		"what's new": "getNewBox",
-		"what's new?": "getNewBox",
-		"what's fresh": "getNewBox",
-		"what's fresh?": "getNewBox",
-		"first box": "getFirstBox",
-		"what time is it": "getTime",
-		"what time is it?": "getTime",
-		"who is testuser": { intent: "getMemberInfo", parameters: { username: "testuser" } },
-		"hardest machines": FILTER_TARGETS("machine", "hardest"),
-		"easiest challenges": FILTER_TARGETS("challenge", "easiest"),
-		"best rated": FILTER_TARGETS("machine", "best rated"),
-		"worst rated": FILTER_TARGETS("machine", "worst rated"),
-		"worst rated machines": FILTER_TARGETS("machine", "worst rated"),
-		"newest / oldest boxes": FILTER_TARGETS("machine", "newest"),
-		"oldest boxes": FILTER_TARGETS("machine", "oldest"),
-		"active boxes": FILTER_TARGETS("machine", "newest", { targetFilterBasis: [{ cust: "active" }] }),
-		"retired boxes": FILTER_TARGETS("machine", "newest", { targetFilterBasis: [{ cust: "inactive" }] }),
-		"linux boxes": FILTER_TARGETS("machine", "newest", { targetFilterBasis: [{ bos: "Linux" }] }),
-		"windows boxes": FILTER_TARGETS("machine", "newest", { targetFilterBasis: [{ bos: "Windows" }] }),
-		"who has the most roots?": {
-			intent: "filterMembers",
-			parameters: {
-				targettype: "member",
-				sortby: ["system_owns"],
-				sortorder: "desc",
-				limit: 15,
-				memberName: [],
-				targetFilterBasis: [],
-			},
-		},
-		"member rankings": {
-			intent: "filterMembers",
-			parameters: {
-				targettype: "member",
-				sortby: ["points"],
-				sortorder: "desc",
-				limit: 15,
-				memberName: [],
-				targetFilterBasis: [],
-			},
-		},
+	const staticEntry = STATIC_PHRASE_MAP[lower]
+	if (staticEntry) {
+		if (typeof staticEntry === "string") {
+			return { intent: staticEntry, parameters: {}, route: "static" }
+		}
+		return {
+			intent: staticEntry.intent,
+			parameters: staticEntry.parameters || {},
+			route: "static",
+		}
 	}
 
-	if (staticMap[lower]) {
-		const entry = staticMap[lower]
-		if (typeof entry === "string") return { intent: entry, parameters: {}, route: "static" }
-		if (entry.intent) return { ...entry, route: "static" }
-		return { intent: entry.intent, parameters: entry.parameters, route: "static" }
+	if (lower === "who is testuser") {
+		return { intent: "getMemberInfo", parameters: { username: "testuser" }, route: "static" }
 	}
 
-	const local = resolveLocalIntent(text)
+	const local = resolveLocalIntent(text, null, null, { dat, message })
 	if (local) return { intent: local.intent, parameters: local.parameters, route: "local" }
 
 	const htbItem = dat.resolveEnt(text, null, null, message, false)
@@ -135,7 +79,7 @@ function resolveSmokeIntent(prompt, dat, message) {
 	}
 
 	const memberInfo = lower.match(/^(?:who is\s+)?(.+?)\s+(?:info|profile)$/)
-	if (memberInfo && !memberInfo[1].includes(" ")) {
+	if (memberInfo && !memberInfo[1].includes(" ") && !["team", "clk", "university"].includes(memberInfo[1])) {
 		return { intent: "getMemberInfo", parameters: { username: memberInfo[1] }, route: "pattern" }
 	}
 

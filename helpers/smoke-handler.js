@@ -198,6 +198,21 @@ async function dispatchSmokeIntent(intent, P, ctx) {
 	case "getTeamBadge":
 		await send.human(message, `https://app.hackthebox.com/badge/team/image/${dat.TEAM_STATS.id}`)
 		break
+	case "getTeamActivity": {
+		const feed = {
+			rows: [{
+				memberName: "testuser",
+				targetName: "Lame",
+				objectType: "machine",
+				ownType: "user",
+				date: new Date().toISOString(),
+				firstBlood: false,
+			}],
+			days: 7,
+		}
+		await send.embed(message, egi.teamActivity(feed.rows, { days: feed.days, error: feed.error }))
+		break
+	}
 	case "getTime":
 		await send.embed(message, egi.binClock(await generateBinaryClockImage()))
 		break
@@ -264,6 +279,15 @@ async function dispatchSmokeIntent(intent, P, ctx) {
 		break
 	case "linkDiscord":
 		await send.human(message, `Smoke test: link Discord ↔ HTB (${P.uid ? "uid " + P.uid : "user " + P.username}) acknowledged.`)
+		break
+	case "agent.doReboot":
+		await send.human(message, "Smoke test: fake reboot acknowledged.")
+		break
+	case "admin.clearCached":
+		await send.human(message, "Smoke test: clear cache acknowledged.")
+		break
+	case "admin.forceUpdateData":
+		await send.human(message, "Smoke test: force update acknowledged.")
 		break
 	default:
 		throw new Error(`Unhandled smoke intent: ${intent}`)

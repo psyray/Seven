@@ -174,6 +174,7 @@ function sectionTeam(teamLabel) {
 # ║ ${entity} overview
 - ║   "${teamLabel} info" / "CLK" / "who are we"
 - ║   "${teamLabel} rank" / "how are we doing" — global ranking
+- ║   "${teamLabel} activity" — recent team owns (last 7 days)
 # ║ Leaderboard
 - ║   "team leaders" / "leaderboard" — top members
 - ║   "who's on top" / "team leader" — #1 spotlight

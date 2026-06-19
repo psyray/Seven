@@ -96,6 +96,7 @@ Placeholders: `_boxname_`, `_challengename_`, `_username_` — replace with real
 
 - `team info` / team name / `who are we`
 - `team rank` / `how are we doing` — global ranking
+- `team activity` — recent team owns (last 7 days)
 
 ### Leaderboard
 

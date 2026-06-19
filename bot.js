@@ -790,6 +790,12 @@ async function sendActivityMsg(message, member, targetType = undefined, sortBy =
 	SEND.embed(message, EGI.memberActivity(member, limit, targetType, sortOrder, sortBy, chartImage))
 }
 
+async function sendTeamActivityMsg(message, days = 7, limit = 25) {
+	message.channel.startTyping()
+	const feed = await DAT.getTeamActivityFeed({ days, limit })
+	SEND.embed(message, EGI.teamActivity(feed.rows, { days: feed.days, error: feed.error }))
+}
+
 
 /**
  * Send a query to the dialogflow agent, and return the query result.
@@ -1227,7 +1233,7 @@ async function handleMessage(message) {
 				} else {
 				var result = await understand(message)
 				var dfParams = struct.decode(result.parameters)
-				var localIntent = resolveLocalIntent(message.content, result, dfParams)
+				var localIntent = resolveLocalIntent(message.content, result, dfParams, { dat: DAT, message })
 				var isRipe = localIntent?.allRequiredParamsPresent ?? result.allRequiredParamsPresent
 				var job = localIntent?.intent ?? result.intent.displayName
 				console.log("[DF]::: Detected intent: " + result.intent.displayName + " | " + (isRipe ? (result.parameters.length ? "All required params present." : "No required parameters") : "Required parameters missing."))
@@ -1269,6 +1275,7 @@ async function handleMessage(message) {
 						case "getTeamLeaders": SEND.embed(message, EGI.teamLeaderboard()); break
 						case "getTeamLeader": sendTeamLeaderMsg(message, result.fulfillmentText); break
 						case "getTeamRanking": SEND.embed(message, EGI.teamRank()); break
+						case "getTeamActivity": await sendTeamActivityMsg(message); break
 						case "getFlagboard": sendFlagboardMsg(message); break
 						case "getTargetInfo": {
 							const targetName = P.targetName || extractTargetNameFromMessage(message.content, P.targetType)
@@ -1376,6 +1383,49 @@ async function handleMessage(message) {
 							} else {
 								await SEND.human(message, "Sorry, not for you.")
 							}
+							break
+						case "getTeamInfo":
+							SEND.embed(message, EGI.teamInfo())
+							break
+						case "getTeamRanking":
+							SEND.embed(message, EGI.teamRank())
+							break
+						case "getTeamLeaders":
+							SEND.embed(message, EGI.teamLeaderboard())
+							break
+						case "getTeamLeader":
+							sendTeamLeaderMsg(message, result.fulfillmentText)
+							break
+						case "getFlagboard":
+							sendFlagboardMsg(message)
+							break
+						case "getTeamBadge":
+							SEND.human(message, F.noncifyUrl(`https://app.hackthebox.com/badge/team/image/${DAT.TEAM_STATS.id}`), true)
+								.then(() => SEND.human(message, result.fulfillmentText, true))
+							break
+						case "getTeamActivity":
+							await sendTeamActivityMsg(message)
+							break
+						case "admin.forceUpdateData":
+							await forceUpdate(message)
+							break
+						case "admin.clearCached":
+							await admin_clearCached(message)
+							break
+						case "getTime":
+							SEND.embed(message, EGI.binClock(await generateBinaryClockImage()))
+							break
+						case "getFirstBox":
+							SEND.embed(message, await EGI.infoFor("machine", "Lame"))
+							await SEND.human(message, result.fulfillmentText)
+							break
+						case "agent.doReboot":
+							await doFakeReboot(message, result.fulfillmentText)
+							break
+						case "filterMembers":
+							SEND.embed(message, EGI.filteredTargets(DAT.filterEnt(message,
+								P.targettype, P.sortby, P.sortorder, P.limit || 15, null, null, P.memberName, P.targetFilterBasis),
+							P.sortby, P, message), true)
 							break
 						default:
 							await SEND.human(message, result.fulfillmentText)

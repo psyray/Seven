@@ -3,6 +3,12 @@
  @module Nlp
 */
 
+const {
+	TEAM_RESERVED_WORDS,
+	resolveStaticPhrase,
+	mayApplyMemberInfoOverride,
+} = require("./intent-phrases.js")
+
 const FILLER_WORDS = new Set([
 	"box", "boxes", "machine", "machines", "challenge", "challenges",
 	"info", "information", "details", "about", "the", "a", "an",
@@ -139,19 +145,81 @@ function parseSetHtbTokensCommand(content) {
 	}
 }
 
+const TARGET_INFO_TYPES = ["machine", "challenge", "fortress", "endgame", "prolab"]
+
+/**
+ * Resolve "name info" using HTB cache: target types before members.
+ * @param {string} name
+ * @param {import("../models/SevenDatastore.js").SevenDatastore|null} [dat]
+ * @param {object|null} [message]
+ * @returns {{ intent: string, parameters: object, allRequiredParamsPresent: true }|null}
+ */
+function resolveCachedNameInfoIntent(name, dat, message) {
+	if (!dat || !name) return null
+	for (const type of TARGET_INFO_TYPES) {
+		const ent = dat.resolveEnt(name, type, false, message, false)
+		if (ent) {
+			return {
+				intent: "getTargetInfo",
+				parameters: { targetType: ent.type || type, targetName: ent.name || name },
+				allRequiredParamsPresent: true,
+			}
+		}
+	}
+	const member = dat.resolveEnt(name, "member", false, message, false)
+	if (member) {
+		return {
+			intent: "getMemberInfo",
+			parameters: { username: member.name || name },
+			allRequiredParamsPresent: true,
+		}
+	}
+	return null
+}
+
+/**
+ * @param {string} name
+ * @param {import("../models/SevenDatastore.js").SevenDatastore|null} [dat]
+ * @param {object|null} [message]
+ * @returns {{ intent: string, parameters: object, allRequiredParamsPresent: true }}
+ */
+function resolveNameInfoIntent(name, dat, message) {
+	const cached = resolveCachedNameInfoIntent(name, dat, message)
+	if (cached) return cached
+	return {
+		intent: "getTargetInfo",
+		parameters: { targetType: "machine", targetName: name },
+		allRequiredParamsPresent: true,
+	}
+}
+
 /**
  * @param {string} content - Raw user message (after "seven" prefix removal).
  * @param {{ intent?: { displayName?: string } }|null} [dfResult]
  * @param {object} [decodedParams] - DialogFlow parameters after struct.decode()
+ * @param {{ dat?: import("../models/SevenDatastore.js").SevenDatastore, message?: object }} [context]
  * @returns {{ intent: string, parameters: object, allRequiredParamsPresent: true }|null}
  */
-function resolveLocalIntent(content, dfResult = null, decodedParams = null) {
+function resolveLocalIntent(content, dfResult = null, decodedParams = null, context = null) {
 	if (!content) return null
 	const text = content.trim()
 	const lower = text.toLowerCase()
+	const dat = context?.dat
+	const message = context?.message
 
 	const dfIntent = dfResult?.intent?.displayName
 	const dfParams = decodedParams || {}
+
+	const staticPhrase = resolveStaticPhrase(lower)
+	if (staticPhrase) return staticPhrase
+
+	if (dfIntent === "getMemberInfo") {
+		const dfName = dfParams.username || dfParams.memberName
+		if (dfName && !checkSelfName(dfName)) {
+			const corrected = resolveCachedNameInfoIntent(String(dfName), dat, message)
+			if (corrected?.intent === "getTargetInfo") return corrected
+		}
+	}
 
 	if (dfIntent === "getTargetInfo" && dfParams.targetType && !dfParams.targetName) {
 		const targetName = extractTargetNameFromMessage(text, dfParams.targetType)
@@ -179,15 +247,15 @@ function resolveLocalIntent(content, dfResult = null, decodedParams = null) {
 		}
 	}
 
-	const memberInfoMatch = lower.match(/^(.+?)\s+(?:info|details|information|profile)\s*$/)
-	if (memberInfoMatch && !memberInfoMatch[1].includes(" ")) {
+	const memberInfoMatch = text.match(/^(.+?)\s+(?:info|details|information|profile)\s*$/i)
+	if (memberInfoMatch && !/\s/.test(memberInfoMatch[1]) && mayApplyMemberInfoOverride(dfIntent)) {
 		const username = memberInfoMatch[1].trim()
-		if (!checkSelfName(username) && !FILLER_WORDS.has(username)) {
-			return {
-				intent: "getMemberInfo",
-				parameters: { username },
-				allRequiredParamsPresent: true,
-			}
+		if (
+			!checkSelfName(username)
+			&& !FILLER_WORDS.has(username)
+			&& !TEAM_RESERVED_WORDS.has(username)
+		) {
+			return resolveNameInfoIntent(username, dat, message)
 		}
 	}
 
@@ -383,5 +451,7 @@ module.exports = {
 	shouldPreserveFullMessageContent,
 	trimMessageContentForHandler,
 	resolveLocalIntentWithoutDialogFlow,
+	resolveCachedNameInfoIntent,
+	resolveNameInfoIntent,
 	resolveLocalIntent,
 }

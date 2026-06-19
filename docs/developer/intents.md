@@ -9,6 +9,7 @@ Dialogflow intents map to handlers in the `switch` block of `bot.js`. Parameters
 | `help` | `sendHelpMessages()` | Paginated manual from `static/strings.js` |
 | `getTeamInfo` | `EGI.teamInfo()` | Team embed |
 | `getTeamRanking` | `EGI.teamRank()` | Global rank embed |
+| `getTeamActivity` | `sendTeamActivityMsg()` | Live team owns from HTB `team/activity` (default 7 days) |
 | `getTeamLeaders` | `EGI.teamLeaderboard()` | Leaderboard embed |
 | `getTeamLeader` | `sendTeamLeaderMsg()` | #1 member spotlight |
 | `getTeamBadge` | URL + fulfillment text | Team badge image link |
@@ -78,6 +79,8 @@ Captain/admin commands (no Dialogflow intent required):
 | `list prolabs` / `list pro labs` / `list fortresses` / `list endgames` / `list all …` | `filterTargets` (catalog list; pro labs = all entries, id asc, mini/standard labels) |
 | `pusher history` / `pusher history <member>` | `captain.pusherHistory` |
 | `pusher repost last` / `pusher repost <id>` | `captain.pusherRepost` |
+| `team info` / `clk` / `who are we` / `team rank` / `team leaders` / `flagboard` / `team badge` / `team activity` | Team intents (see user intents table) |
+| `reboot` / `what time is it?` / `first box` / `clear cache` / `force update` | Fun/admin local overrides |
 
 ## Common parameters
 

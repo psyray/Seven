@@ -26,7 +26,9 @@
 		"test:member-activity-hydrate": "node test/member-activity-hydrate.test.js",
 		"test:target-activity": "node test/target-activity-on-demand.test.js",
 		"test:embed-bloods": "node test/embed-bloods-basic.test.js",
-		"test:all": "npm run test:intents && npm run test:handler && npm run test:charts && npm run test:pusher && npm run test:sync && npm run test:member-lab && npm run test:set-htb-tokens && npm run test:htb-token-status && npm run test:team-activity && npm run test:htb-optional && npm run test:member-activity-hydrate && npm run test:target-activity && npm run test:embed-bloods",
+		"test:team-activity-cmd": "node test/team-activity-command.test.js",
+		"test:target-info-routing": "node test/target-info-routing.test.js",
+		"test:all": "npm run test:intents && npm run test:handler && npm run test:charts && npm run test:pusher && npm run test:sync && npm run test:member-lab && npm run test:set-htb-tokens && npm run test:htb-token-status && npm run test:team-activity && npm run test:team-activity-cmd && npm run test:target-info-routing && npm run test:htb-optional && npm run test:member-activity-hydrate && npm run test:target-activity && npm run test:embed-bloods",
 		"test:e2e": "node scripts/e2e-help-audit.js",
 		"test:logs": "node scripts/analyze-seven-logs.js",
 		"doc:generate": "jsdoc -c jsdoc.config.json"

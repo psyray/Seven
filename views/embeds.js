@@ -1178,6 +1178,36 @@ class HtbEmbeds {
 			.setDescription(lines.join("\n"))
 	}
 
+	teamActivity(rows, meta = {}) {
+		const days = meta.days || 7
+		if (meta.error === "no_team") {
+			return this.TEAM_INFO_BASE
+				.setTitle("Team activity unavailable")
+				.setDescription("HTB team data is not loaded yet. Try `seven force update` or wait for the next scheduled sync.")
+		}
+		if (meta.error === "api_unavailable") {
+			return this.TEAM_INFO_BASE
+				.setTitle("Team activity unavailable")
+				.setDescription("Could not fetch team activity from HTB (auth or endpoint issue). Check OAuth tokens with `seven htb token status`.")
+		}
+		const lines = []
+		if (!rows?.length) {
+			lines.push(`_No team activity in the last ${days} days._`)
+		} else {
+			rows.forEach(row => {
+				const at = row.date || "?"
+				const flag = row.ownType && row.ownType !== row.objectType ? ` (${row.ownType})` : ""
+				const blood = row.firstBlood ? " 🩸" : ""
+				lines.push(`\`${at}\` **${row.memberName}** ${row.objectType || "?"} **${row.targetName}**${flag}${blood}`)
+			})
+		}
+		lines.push("", `_Showing up to ${rows?.length || 0} recent owns (last ${days} days)._`)
+		return this.TEAM_INFO_BASE
+			.setAuthor("Team activity", this.ds.TEAM_STATS?.avatar_url || undefined)
+			.setDescription(lines.join("\n"))
+			.setFooter(`ℹ️  Live data from HTB team/activity · last ${days} days`)
+	}
+
 	pusherNotif(event, memberLabel=null) {
 		var {markdown:md, target} = event
 		target = target ? this.ds.getMachineByName(target) : null

@@ -1197,6 +1197,47 @@ class SevenDatastore {
 		return filteredOwns || null
 	}
 
+	/**
+	 * Live team-wide activity feed from HTB team/activity API.
+	 * @param {{ days?: number, limit?: number }} [options]
+	 * @returns {Promise<{ rows: object[], days: number, error?: string }>}
+	 */
+	async getTeamActivityFeed({ days = 7, limit = 25 } = {}) {
+		const teamId = this.TEAM_STATS?.id
+		if (!teamId) {
+			return { rows: [], days, error: "no_team" }
+		}
+		const sinceMs = Date.now() - (days * 86400000)
+		try {
+			const items = await this.V4API.getRecentTeamActivityForFallback(teamId, sinceMs)
+			const rows = []
+			for (const item of items) {
+				if (rows.length >= limit) break
+				const uid = Number(item.user_id ?? item.user?.id)
+				const member = uid ? this.getMemberById(uid) : null
+				const memberName = member?.name || item.user?.name || (uid ? `uid:${uid}` : "?")
+				const objectType = String(item.object_type || "").toLowerCase()
+				const ownType = item.type || objectType
+				const targetName = item.name || "?"
+				const at = item.date || item.created_at
+				rows.push({
+					memberName,
+					targetName,
+					objectType,
+					ownType,
+					date: at ? new Date(at).toISOString() : null,
+					firstBlood: Boolean(item.first_blood),
+				})
+			}
+			return { rows, days }
+		} catch (error) {
+			if ([400, 401, 403].includes(error.status)) {
+				return { rows: [], days, error: "api_unavailable" }
+			}
+			throw error
+		}
+	}
+
 	getAllMachineTagNames(
 		machine = {
 			tags: [],
