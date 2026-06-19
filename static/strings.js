@@ -262,6 +262,12 @@ function sectionCaptain() {
 - ║   "pusher repost last" / "pusher repost <id>" — force post to announce channel
 - ║   Missing targets are auto-fetched from HTB before repost.
 - ║   Repost does not re-integrate HTB team stats.
+# ║ Team activity sync (captain only)
+- ║   "team activity sync" — silent backfill (cache + DB, no announce channel)
+- ║   "team activity sync 30" — silent sync, 30-day lookback (default 7, max 90)
+- ║   "team activity sync publish" — post 5 most recent missing owns to announce
+- ║   "team activity sync publish 10" — post N most recent missing owns
+- ║   "team activity sync publish-all" — post all missing owns (throttled)
 ══╝`
 }
 

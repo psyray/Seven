@@ -28,7 +28,7 @@ const dflow = new dialogflow.SessionsClient({ credentials: JSON.parse(process.en
 const strings = require("./static/strings")
 const { Helpers: H } = require("./helpers/helpers.js")
 const { HtbPusherSubscription } = require("./helpers/pusher-htb")
-const { NotificationRouter } = require("./helpers/notification-router")
+const { NotificationRouter, SYNC_DEFAULT_PUBLISH_LIMIT, SYNC_DEFAULT_DAYS } = require("./helpers/notification-router")
 const { NotificationStore } = require("./helpers/notification-store")
 const pgp = require("pg-promise")({ capSQL: true })
 const htbCharts = require("./modules/charts/index_new.js")
@@ -1183,6 +1183,68 @@ async function captainPusherRepost(message, parameters = {}) {
 	}
 }
 
+async function captainTeamActivitySync(message, parameters = {}) {
+	if (!isCaptain(message.author)) {
+		await SEND.human(message, "Sorry, captain only.")
+		return
+	}
+	const mode = parameters.mode || "silent"
+	const days = parameters.days ?? SYNC_DEFAULT_DAYS
+	const publishLimit = parameters.publishLimit ?? SYNC_DEFAULT_PUBLISH_LIMIT
+	message.channel.startTyping()
+	try {
+		const scope = mode === "silent" ? "recorded" : "announced"
+		const diff = await NOTIFICATION_ROUTER.computeActivitySyncDiff({ days, scope })
+
+		if (diff.error) {
+			await SEND.embed(message, NOTIFICATION_ROUTER.getActivitySyncPreviewEmbed(diff, { mode }))
+			return
+		}
+
+		if (mode === "silent") {
+			if (!diff.stats.missing) {
+				await SEND.embed(message, NOTIFICATION_ROUTER.getActivitySyncPreviewEmbed(diff, { mode }))
+				return
+			}
+			await SEND.embed(message, NOTIFICATION_ROUTER.getActivitySyncPreviewEmbed(diff, { mode }))
+			const stats = await NOTIFICATION_ROUTER.executeActivitySilentSync(diff.items)
+			await SEND.human(
+				message,
+				`Silent sync complete: **${stats.synced}** recorded (cache + DB), **${stats.failed}** failed, **${stats.skipped}** skipped.`,
+				true
+			)
+			return
+		}
+
+		let items = diff.items
+		if (mode === "publish") {
+			items = items.slice(-publishLimit)
+		}
+
+		if (!items.length) {
+			await SEND.embed(message, NOTIFICATION_ROUTER.getActivitySyncPreviewEmbed(diff, { mode }))
+			return
+		}
+
+		await SEND.embed(message, NOTIFICATION_ROUTER.getActivitySyncPreviewEmbed(
+			{ ...diff, items, stats: { ...diff.stats, publishing: items.length } },
+			{ mode }
+		))
+		const stats = await NOTIFICATION_ROUTER.executeActivityPublish(items)
+		const label = mode === "publishAll" ? "Publish-all" : "Publish"
+		await SEND.human(
+			message,
+			`${label} complete: **${stats.announced}** posted to announce channel, **${stats.failed}** failed, **${stats.skipped}** skipped.`,
+			true
+		)
+	} catch (error) {
+		log.error("Team activity sync failed", { message: error.message, stack: error.stack })
+		await SEND.human(message, `Team activity sync failed: ${error.message}`, true)
+	} finally {
+		message.channel.stopTyping(true)
+	}
+}
+
 async function dispatchOAuthLocalIntent(message, localIntent, smokeId) {
 	console.log("[NLP]::: DialogFlow skipped for OAuth command:", localIntent.intent, localIntent.parameters?.mode || "")
 	let smokeOk = true
@@ -1259,6 +1321,7 @@ async function handleMessage(message) {
 						case "admin.pusherStatus": if (isAdmin(message.author)) { SEND.embed(message, NOTIFICATION_ROUTER.getStatusEmbed()) } else { SEND.human(message, "Sorry, not for you.") } break
 						case "captain.pusherHistory": await captainPusherHistory(message, P); break
 						case "captain.pusherRepost": await captainPusherRepost(message, P); break
+						case "captain.teamActivitySync": await captainTeamActivitySync(message, P); break
 						case "admin.setStatus": admin_setStatus(message, inf); break
 						case "admin.clearEmoji": E.clearCustEmoji(client).then(SEND.human(message, "Successfully purged Seven-related emoji from supporting channel.", false)); break
 						case "admin.setupEmoji": E.initCustEmoji(client).then(SEND.human(message, "Successfully initialized Seven-related emoji on supporting channel.", false)); break
@@ -1367,6 +1430,9 @@ async function handleMessage(message) {
 							break
 						case "captain.pusherRepost":
 							await captainPusherRepost(message, P)
+							break
+						case "captain.teamActivitySync":
+							await captainTeamActivitySync(message, P)
 							break
 						case "admin.htbTokenSet":
 							await admin_htbTokenSet(message, P)

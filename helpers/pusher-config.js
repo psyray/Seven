@@ -28,6 +28,7 @@ function getPusherNotificationConfig() {
 		mentionOnOwn: envBool("PUSHER_MENTION_ON_OWN", true),
 		dbPersistDebounceMs: envInt("PUSHER_DB_PERSIST_DEBOUNCE_MS", 30000),
 		fallbackPollMs: envInt("PUSHER_FALLBACK_POLL_MS", 300000),
+		syncAnnounceDelayMs: envInt("PUSHER_SYNC_ANNOUNCE_DELAY_MS", 1500),
 	}
 }
 

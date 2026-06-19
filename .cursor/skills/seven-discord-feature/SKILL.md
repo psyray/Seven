@@ -109,6 +109,7 @@ Dialogflow may still supply `targetFilterBasis` (e.g. `blang: "Active Directory"
 | `admin.pusherStatus` | `NOTIFICATION_ROUTER.getStatusEmbed()` | — |
 | `captain.pusherHistory` | `NOTIFICATION_ROUTER.getHistoryEmbed()` | — |
 | `captain.pusherRepost` | `NOTIFICATION_ROUTER.repostToChannel()` | `forceRepost` skips dedup + stat integration |
+| `captain.teamActivitySync` | `computeActivitySyncDiff()` + silent/publish | Silent: cache+DB only; publish: throttled announce |
 
 ## Pusher real-time notifications
 

@@ -963,7 +963,9 @@ class HtbEmbeds {
 
 	pusherOwn(member, target, type, sub, blood=false, memberLabel=null) {
 		const resolveType = type === "starting_point" ? "machine" : type
-		target = this.ds.resolveEnt(target, resolveType)
+		if (!target || typeof target === "string") {
+			target = this.ds.resolveEnt(target, resolveType)
+		}
 		if (!member || !target){
 			return this.ENTITY_UNFOUND
 		}
@@ -1206,6 +1208,54 @@ class HtbEmbeds {
 			.setAuthor("Team activity", this.ds.TEAM_STATS?.avatar_url || undefined)
 			.setDescription(lines.join("\n"))
 			.setFooter(`ℹ️  Live data from HTB team/activity · last ${days} days`)
+	}
+
+	teamActivitySyncPreview({ stats = {}, sample = [], days = 7, mode = "silent", error = null } = {}) {
+		if (error === "no_team") {
+			return this.TEAM_INFO_BASE
+				.setTitle("Team activity sync unavailable")
+				.setDescription("HTB team data is not loaded yet. Try `seven force update` or wait for the next scheduled sync.")
+		}
+		if (error === "api_unavailable") {
+			return this.TEAM_INFO_BASE
+				.setTitle("Team activity sync unavailable")
+				.setDescription("Could not fetch team activity from HTB (auth or endpoint issue). Check OAuth tokens with `seven htb token status`.")
+		}
+		if (error === "auth_blocked") {
+			return this.TEAM_INFO_BASE
+				.setTitle("Team activity sync unavailable")
+				.setDescription("HTB OAuth auth is blocked. Run `seven htb token set <refresh>` then retry.")
+		}
+		const scopeLabel = mode === "silent" ? "not yet recorded" : "not yet posted to announce channel"
+		const lines = []
+		if (!stats.missing) {
+			lines.push(`_No missing owns ${scopeLabel} in the last ${days} days._`)
+		} else {
+			const publishing = stats.publishing ? ` · **${stats.publishing}** to publish now` : ""
+			lines.push(
+				`**${stats.missing}** own(s) ${scopeLabel} (last ${days} days).`,
+				`**${stats.known}** already known · **${stats.total}** raw API items scanned${publishing}.`
+			)
+			if (sample.length) {
+				const orderHint = mode === "publish" ? "oldest first in queue; publish takes the most recent" : "oldest first"
+				lines.push("", `**Preview (${orderHint}):**`, ...sample)
+				if (stats.missing > sample.length) {
+					lines.push(`_…and ${stats.missing - sample.length} more._`)
+				}
+			}
+		}
+		const hints = {
+			silent: "`team activity sync publish` — post last 5 to announce · `team activity sync publish-all` — post all (throttled)",
+			publish: "Publishing the **most recent** missing owns to the announce channel.",
+			publishAll: "Publishing **all** missing owns to the announce channel (throttled).",
+		}
+		if (hints[mode] && stats.missing) {
+			lines.push("", hints[mode])
+		}
+		return this.TEAM_INFO_BASE
+			.setAuthor("Team activity sync", this.ds.TEAM_STATS?.avatar_url || undefined)
+			.setDescription(lines.join("\n"))
+			.setFooter(`ℹ️  team/activity vs seven_notification_events · last ${days} days`)
 	}
 
 	pusherNotif(event, memberLabel=null) {

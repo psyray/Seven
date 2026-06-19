@@ -185,6 +185,11 @@ Not available to admins unless they are also in `CAPTAIN_DISCORD_IDS`:
 - `pusher repost last` — repost the latest stored own/flag to the announce channel
 - `pusher repost <id>` — repost a specific event (id from history embed)
 - Missing targets are fetched from HTB automatically before repost when possible
+- `team activity sync` — silent backfill: cache + DB, no announce channel posts
+- `team activity sync 30` — silent sync with 30-day lookback (default 7, max 90)
+- `team activity sync publish` — post 5 most recent missing owns to announce channel
+- `team activity sync publish 10` — post N most recent missing owns
+- `team activity sync publish-all` — post all missing owns (throttled)
 
 See [notifications.md](notifications.md) for details.
 

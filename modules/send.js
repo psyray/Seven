@@ -162,18 +162,19 @@ class Send {
 	}
 
 	async embed(message, content, noMention = true) {
-		return new Promise(resolve => {
+		try {
 			if (Array.isArray(content)) {
-				asyncForEach(content, async (embed) => {
-					if (noMention) { await message?.channel?.send(embed) }
-					else { await message.reply(embed) }
-				})
-				resolve()
-			} else {
-				if (noMention) { message?.channel?.send(content) }
-				else { message.reply(content) }
+				for (const item of content) {
+					if (noMention) await message?.channel?.send(item)
+					else await message.reply(item)
+				}
+			} else if (content) {
+				if (noMention) await message?.channel?.send(content)
+				else await message.reply(content)
 			}
-		}).then(() => message.channel.stopTyping(true))
+		} finally {
+			message.channel?.stopTyping?.(true)
+		}
 	}
 
 }

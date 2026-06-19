@@ -356,6 +356,43 @@ function resolveLocalIntent(content, dfResult = null, decodedParams = null, cont
 		}
 	}
 
+	const teamActivityPublishAllMatch = text.match(/^team\s+activity\s+sync\s+publish-all(?:\s+(\d+))?\s*$/i)
+	if (teamActivityPublishAllMatch) {
+		return {
+			intent: "captain.teamActivitySync",
+			parameters: {
+				mode: "publishAll",
+				days: teamActivityPublishAllMatch[1] ? Number(teamActivityPublishAllMatch[1]) : null,
+			},
+			allRequiredParamsPresent: true,
+		}
+	}
+
+	const teamActivityPublishMatch = text.match(/^team\s+activity\s+sync\s+publish(?:\s+(\d+))?(?:\s+(\d+))?\s*$/i)
+	if (teamActivityPublishMatch) {
+		return {
+			intent: "captain.teamActivitySync",
+			parameters: {
+				mode: "publish",
+				publishLimit: teamActivityPublishMatch[1] ? Number(teamActivityPublishMatch[1]) : null,
+				days: teamActivityPublishMatch[2] ? Number(teamActivityPublishMatch[2]) : null,
+			},
+			allRequiredParamsPresent: true,
+		}
+	}
+
+	const teamActivitySyncMatch = text.match(/^team\s+activity\s+sync(?:\s+(\d+))?\s*$/i)
+	if (teamActivitySyncMatch) {
+		return {
+			intent: "captain.teamActivitySync",
+			parameters: {
+				mode: "silent",
+				days: teamActivitySyncMatch[1] ? Number(teamActivitySyncMatch[1]) : null,
+			},
+			allRequiredParamsPresent: true,
+		}
+	}
+
 	const syncSectionMatch = lower.match(/^sync\s+(machines?|challenges?|fortresses?|endgames?|pro\s*labs?|prolabs?|specials?|all)\s*$/)
 	if (syncSectionMatch) {
 		return {

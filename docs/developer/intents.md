@@ -45,6 +45,7 @@ Dialogflow intents map to handlers in the `switch` block of `bot.js`. Parameters
 | `admin.pusherStatus` | Admin | `NOTIFICATION_ROUTER.getStatusEmbed()` |
 | `captain.pusherHistory` | Captain | `NOTIFICATION_ROUTER.getHistoryEmbed()` → `EGI.pusherHistory()` |
 | `captain.pusherRepost` | Captain | `NOTIFICATION_ROUTER.repostToChannel()` → `handleOwnEvent({ forceRepost: true })` |
+| `captain.teamActivitySync` | Captain | Silent sync, `publish` (N recent), or `publish-all` — see modes below |
 | `admin.setStatus` | Admin | `admin_setStatus()` |
 | `admin.setupEmoji` | — | `E.initCustEmoji()` |
 | `admin.clearEmoji` | — | `E.clearCustEmoji()` |
@@ -79,6 +80,9 @@ Captain/admin commands (no Dialogflow intent required):
 | `list prolabs` / `list pro labs` / `list fortresses` / `list endgames` / `list all …` | `filterTargets` (catalog list; pro labs = all entries, id asc, mini/standard labels) |
 | `pusher history` / `pusher history <member>` | `captain.pusherHistory` |
 | `pusher repost last` / `pusher repost <id>` | `captain.pusherRepost` |
+| `team activity sync` / `team activity sync 30` | `captain.teamActivitySync` (mode `silent`) |
+| `team activity sync publish` / `team activity sync publish 10` | `captain.teamActivitySync` (mode `publish`) |
+| `team activity sync publish-all` / `team activity sync publish-all 30` | `captain.teamActivitySync` (mode `publishAll`) |
 | `team info` / `clk` / `who are we` / `team rank` / `team leaders` / `flagboard` / `team badge` / `team activity` | Team intents (see user intents table) |
 | `reboot` / `what time is it?` / `first box` / `clear cache` / `force update` | Fun/admin local overrides |
 

@@ -4,12 +4,20 @@
  */
 const { createLogger } = require("./logger.js")
 const { getPusherNotificationConfig } = require("./pusher-config.js")
+const { wait } = require("./helpers.js")
 
 const log = createLogger("notification-router")
 
 const OWN_TYPES = new Set([
 	"machine", "challenge", "endgame", "fortress", "prolab", "starting_point",
 ])
+
+const OWN_TYPE_LIST = [...OWN_TYPES]
+const SYNC_DEFAULT_PUBLISH_LIMIT = 5
+const SYNC_DEFAULT_DAYS = 7
+const SYNC_MAX_DAYS = 90
+const SYNC_BOOTSTRAP_KEY_DAYS = 90
+const SYNC_SEND_MAX_RETRIES = 3
 
 /** Ignore brief Pusher websocket blips shorter than this. */
 const PUSHER_CATCHUP_MIN_DOWN_MS = 15000
@@ -54,12 +62,14 @@ class NotificationRouter {
 		/** Owns already posted to Discord (independent of HTB cache / force-update). */
 		this.announcedOwnKeys = new Set()
 		this.lastFallbackPollStats = null
+		this.lastThrottledSendAt = 0
+		this.syncCacheDirty = false
 	}
 
 	ownAnnouncementKey(message) {
 		return [
 			message?.uid,
-			message?.type,
+			message?.event_type ?? message?.type,
 			message?.target,
 			message?.flag,
 			message?.blood ? "blood" : "",
@@ -91,6 +101,23 @@ class NotificationRouter {
 		if (recent.length) {
 			this.lastEvents = recent
 		}
+		const sinceMs = Date.now() - (SYNC_BOOTSTRAP_KEY_DAYS * 86400000)
+		try {
+			const rows = await this.notificationStore.loadKnownOwnRows({
+				sinceMs,
+				ownTypes: OWN_TYPE_LIST,
+			})
+			for (const row of rows) {
+				if (row.uid && row.event_type && row.target) {
+					this.announcedOwnKeys.add(this.ownAnnouncementKey(row))
+				}
+			}
+			if (rows.length) {
+				log.info("Hydrated announcedOwnKeys from notification store", { count: rows.length })
+			}
+		} catch (error) {
+			log.warn("Failed to hydrate announcedOwnKeys from store", { message: error.message })
+		}
 	}
 
 	async recordEvent(message, note = null) {
@@ -108,7 +135,10 @@ class NotificationRouter {
 
 		if (this.notificationStore) {
 			try {
-				const isAnnounced = typeof note === "string" && (note.startsWith("announced") || note.startsWith("reposted"))
+				const isAnnounced = typeof note === "string" && (
+					note.startsWith("announced") || note.startsWith("reposted") ||
+					(note.startsWith("synced") && !note.includes("silent"))
+				)
 				const id = await this.notificationStore.append({
 					event_at: message?.time ? new Date(message.time) : new Date(),
 					uid: message?.uid ?? null,
@@ -134,6 +164,25 @@ class NotificationRouter {
 		if (this.lastEvents.length > 25) {
 			this.lastEvents.length = 25
 		}
+	}
+
+	async sendAnnouncementThrottled(payload) {
+		const delayMs = this.config.syncAnnounceDelayMs || 1500
+		const elapsed = Date.now() - this.lastThrottledSendAt
+		if (elapsed < delayMs) {
+			await wait(delayMs - elapsed)
+		}
+		for (let attempt = 0; attempt < SYNC_SEND_MAX_RETRIES; attempt++) {
+			const sent = await this.sendAnnouncement(payload)
+			if (sent) {
+				this.lastThrottledSendAt = Date.now()
+				return true
+			}
+			const backoffMs = delayMs * (attempt + 2)
+			log.warn("Throttled announce retry", { attempt: attempt + 1, backoffMs })
+			await wait(backoffMs)
+		}
+		return false
 	}
 
 	async sendAnnouncement(payload) {
@@ -237,8 +286,63 @@ class NotificationRouter {
 		return true
 	}
 
-	async handleOwnEvent(message, { forceRepost = false } = {}) {
-		if (!forceRepost) {
+	async handleOwnSilentSync(message) {
+		if (!this.isTeamMember(message.uid)) {
+			return { ok: false, reason: "not_team_member" }
+		}
+
+		const member = await this.dat.resolveEnt(message.uid, "member", true, null, true)
+		const resolveType = message.type === "starting_point" ? "machine" : message.type
+		let targetEntity = this.dat.resolveEnt(message.target, resolveType)
+		if (!member) {
+			await this.recordEvent(message, "skipped: member not resolved")
+			return { ok: false, reason: "member_not_resolved" }
+		}
+		if (!targetEntity) {
+			targetEntity = await this.dat.ensureCachedTarget(resolveType, message.target, { trigger: "activity-sync" })
+		}
+		if (!targetEntity) {
+			await this.recordEvent(message, "skipped: target not in cache")
+			return { ok: false, reason: "target_not_in_cache" }
+		}
+
+		if (message.blood) {
+			this.dat.integratePusherBlood(
+				member,
+				message.uid,
+				message.time,
+				message.type,
+				message.target,
+				message.flag,
+				true
+			)
+			this.dat.incrementTeamStatsFromOwn?.(message.flag, message.type, true)
+		}
+
+		const changed = this.dat.integratePusherOwn(
+			message.uid,
+			message.time,
+			message.type,
+			message.target,
+			message.flag,
+			true
+		)
+		if (changed) {
+			this.dat.incrementTeamStatsFromOwn?.(message.flag, message.type, message.blood)
+			this.syncCacheDirty = true
+		}
+
+		await this.recordEvent(message, "synced silent from team activity")
+		log.info("Own synced silently from team activity", {
+			uid: message.uid,
+			target: message.target,
+			type: message.type,
+		})
+		return { ok: true }
+	}
+
+	async handleOwnEvent(message, { forceRepost = false, syncBackfill = false } = {}) {
+		if (!forceRepost && !syncBackfill) {
 			if (!this.shouldAnnounceOwn(message) || !this.matchesOwnConfig(message)) {
 				const reason = !this.shouldAnnounceOwn(message)
 					? "not team member, discord link, or blood"
@@ -253,7 +357,9 @@ class NotificationRouter {
 				await this.recordEvent(message, `skipped: ${reason}`)
 				return { ok: false, reason }
 			}
-		} else if (!this.isTeamMember(message.uid) && !message.blood && !this.dat.DISCORD_LINKS?.[message.uid]) {
+		} else if (!syncBackfill && !this.isTeamMember(message.uid) && !message.blood && !this.dat.DISCORD_LINKS?.[message.uid]) {
+			return { ok: false, reason: "not_team_member" }
+		} else if (syncBackfill && !this.isTeamMember(message.uid)) {
 			return { ok: false, reason: "not_team_member" }
 		}
 
@@ -266,7 +372,7 @@ class NotificationRouter {
 			return { ok: false, reason: "member_not_resolved" }
 		}
 		if (!targetEntity) {
-			targetEntity = await this.dat.ensureCachedTarget(resolveType, message.target, { trigger: "pusher" })
+			targetEntity = await this.dat.ensureCachedTarget(resolveType, message.target, { trigger: syncBackfill ? "activity-sync" : "pusher" })
 		}
 		if (!targetEntity) {
 			log.warn("Own announce skipped — target not in cache", {
@@ -281,14 +387,15 @@ class NotificationRouter {
 		const { mentionText, mentionUserIds } = this.getMentionPayload(message.uid)
 		const embed = this.embeds.pusherOwn(
 			member,
-			message.target,
+			targetEntity,
 			message.type,
 			message.flag || message.type,
 			message.blood,
 			mentionText
 		)
 
-		const sent = await this.sendAnnouncement({ embed, mentionUserIds })
+		const sendFn = syncBackfill ? this.sendAnnouncementThrottled.bind(this) : this.sendAnnouncement.bind(this)
+		const sent = await sendFn({ embed, mentionUserIds })
 		if (!sent) {
 			log.warn("Own announce failed — Discord send returned false", {
 				uid: message.uid,
@@ -302,6 +409,7 @@ class NotificationRouter {
 		if (!forceRepost) {
 			this.markOwnAnnounced(message)
 		}
+		const note = forceRepost ? "reposted own" : (syncBackfill ? "synced from team activity" : "announced own")
 		log.info("Own announced to Discord", {
 			uid: message.uid,
 			target: message.target,
@@ -309,11 +417,12 @@ class NotificationRouter {
 			flag: message.flag,
 			source: message.channel,
 			forceRepost,
+			syncBackfill,
 		})
-		await this.recordEvent(message, forceRepost ? "reposted own" : "announced own")
+		await this.recordEvent(message, note)
 
 		if (!forceRepost) {
-			if (message.blood) {
+			if (message.blood && !syncBackfill) {
 				this.dat.integratePusherBlood(
 					member,
 					message.uid,
@@ -327,6 +436,17 @@ class NotificationRouter {
 				for (let i = 0; i < 3; i++) {
 					await this.sendAnnouncement({ content: "‼", deleteAfterMs: 1500 })
 				}
+			} else if (message.blood && syncBackfill) {
+				this.dat.integratePusherBlood(
+					member,
+					message.uid,
+					message.time,
+					message.type,
+					message.target,
+					message.flag,
+					true
+				)
+				this.dat.incrementTeamStatsFromOwn?.(message.flag, message.type, true)
 			}
 
 			if (this.isTeamMember(message.uid)) {
@@ -340,7 +460,11 @@ class NotificationRouter {
 				)
 				if (changed) {
 					this.dat.incrementTeamStatsFromOwn?.(message.flag, message.type, message.blood)
-					this.scheduleCachePersist()
+					if (syncBackfill) {
+						this.syncCacheDirty = true
+					} else {
+						this.scheduleCachePersist()
+					}
 				}
 			}
 		}
@@ -668,8 +792,149 @@ class NotificationRouter {
 
 		return { ok: true, row }
 	}
+
+	_clampSyncDays(days) {
+		const parsed = Number(days)
+		if (!Number.isFinite(parsed) || parsed < 1) return SYNC_DEFAULT_DAYS
+		return Math.min(Math.floor(parsed), SYNC_MAX_DAYS)
+	}
+
+	async _loadKnownOwnKeySet(sinceMs, { announcedOnly = false } = {}) {
+		const knownKeys = announcedOnly ? new Set() : new Set(this.announcedOwnKeys)
+		if (!this.notificationStore) return knownKeys
+		const rows = await this.notificationStore.loadKnownOwnRows({
+			sinceMs,
+			ownTypes: OWN_TYPE_LIST,
+			announcedOnly,
+		})
+		for (const row of rows) {
+			if (row.uid && row.event_type && row.target) {
+				knownKeys.add(this.ownAnnouncementKey(row))
+			}
+		}
+		if (announcedOnly) {
+			for (const key of this.announcedOwnKeys) {
+				knownKeys.add(key)
+			}
+		}
+		return knownKeys
+	}
+
+	async computeActivitySyncDiff({ days = SYNC_DEFAULT_DAYS, scope = "recorded" } = {}) {
+		const clampedDays = this._clampSyncDays(days)
+		const teamId = this.getTeamId?.()
+		if (!teamId) {
+			return { items: [], stats: { total: 0, known: 0, missing: 0, days: clampedDays }, error: "no_team" }
+		}
+		if (this.dat.V4API?.isAuthBlocked?.()) {
+			return { items: [], stats: { total: 0, known: 0, missing: 0, days: clampedDays }, error: "auth_blocked" }
+		}
+
+		const sinceMs = Date.now() - (clampedDays * 86400000)
+		let rawItems
+		try {
+			rawItems = await this.fetchRecentMemberActivity(sinceMs)
+		} catch (error) {
+			if ([400, 401, 403].includes(error.status)) {
+				return { items: [], stats: { total: 0, known: 0, missing: 0, days: clampedDays }, error: "api_unavailable" }
+			}
+			throw error
+		}
+
+		const announcedOnly = scope === "announced"
+		const knownKeys = await this._loadKnownOwnKeySet(sinceMs, { announcedOnly })
+		const normalized = []
+		let known = 0
+		for (const item of rawItems) {
+			const entry = this.normalizeMemberActivityItem(item, item.user_id)
+			if (!entry || !OWN_TYPES.has(entry.type) || !this.isTeamMember(entry.uid)) continue
+			entry.channel = "team-activity-sync"
+			const key = this.ownAnnouncementKey(entry)
+			if (knownKeys.has(key)) {
+				known++
+				continue
+			}
+			knownKeys.add(key)
+			normalized.push(entry)
+		}
+
+		normalized.sort((a, b) => a.time - b.time)
+		return {
+			items: normalized,
+			stats: {
+				total: rawItems.length,
+				known,
+				missing: normalized.length,
+				days: clampedDays,
+			},
+		}
+	}
+
+	async executeActivitySilentSync(items) {
+		let synced = 0
+		let failed = 0
+		let skipped = 0
+		this.syncCacheDirty = false
+		for (const item of items) {
+			const result = await this.handleOwnSilentSync(item)
+			if (result?.ok) {
+				synced++
+			} else if (result?.reason === "not_team_member") {
+				skipped++
+			} else {
+				failed++
+			}
+		}
+		if (this.syncCacheDirty) {
+			this.scheduleCachePersist()
+			this.syncCacheDirty = false
+		}
+		return { synced, failed, skipped, total: items.length }
+	}
+
+	async executeActivityPublish(items) {
+		let announced = 0
+		let failed = 0
+		let skipped = 0
+		this.syncCacheDirty = false
+		for (const item of items) {
+			const result = await this.handleOwnEvent(item, { syncBackfill: true })
+			if (result?.ok) {
+				announced++
+			} else if (result?.reason === "not_team_member") {
+				skipped++
+			} else {
+				failed++
+			}
+		}
+		if (this.syncCacheDirty) {
+			this.scheduleCachePersist()
+			this.syncCacheDirty = false
+		}
+		return { announced, failed, skipped, total: items.length }
+	}
+
+	getActivitySyncPreviewEmbed(diff, { mode = "silent" } = {}) {
+		const { items, stats, error } = diff
+		const sample = items.slice(0, 10).map(item => {
+			const member = this.dat.getMemberById?.(item.uid)
+			const blood = item.blood ? " 🩸" : ""
+			const flag = item.flag && item.flag !== item.type ? ` (${item.flag})` : ""
+			return `**${member?.name || item.uid}** ${item.type} **${item.target}**${flag}${blood}`
+		})
+		return this.embeds.teamActivitySyncPreview({
+			stats,
+			sample,
+			days: stats.days,
+			mode,
+			error,
+		})
+	}
 }
 
 module.exports = {
 	NotificationRouter,
+	SYNC_DEFAULT_PUBLISH_LIMIT,
+	SYNC_DEFAULT_DAYS,
+	SYNC_MAX_DAYS,
 }

@@ -130,6 +130,34 @@ class NotificationStore {
 		}
 	}
 
+	/**
+	 * @param {{ sinceMs?: number, ownTypes?: string[], announcedOnly?: boolean }} options
+	 * @returns {Promise<Array<{ uid: number, event_type: string, target: string, flag: string, blood: boolean }>>}
+	 */
+	async loadKnownOwnRows({ sinceMs = null, ownTypes = [], announcedOnly = false } = {}) {
+		const clauses = []
+		const params = []
+		if (sinceMs) {
+			params.push(new Date(sinceMs))
+			clauses.push(`event_at >= $${params.length}`)
+		}
+		if (ownTypes?.length) {
+			params.push(ownTypes)
+			clauses.push(`event_type = ANY($${params.length})`)
+		}
+		if (announcedOnly) {
+			clauses.push(`announced = TRUE`)
+		}
+		const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""
+		return this.db.any(
+			`SELECT uid, event_type, target, flag, blood
+			 FROM ${TABLE_NAME}
+			 ${where}
+			 ORDER BY event_at ASC`,
+			params
+		)
+	}
+
 	async loadRecentIntoMemory(limit = 25) {
 		try {
 			const rows = await this.list({ limit })

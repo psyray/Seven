@@ -36,6 +36,8 @@ HtbPusherSubscription [pusher-htb.js]
 | Channel resubscribe | On `disconnected → connected`, re-subscribes all Pusher channels |
 | Admin status | `seven pusher status` — connection, queue, fallback poll stats |
 | Captain recovery | `seven pusher history` / `seven pusher repost last\|<id>` |
+| Captain bootstrap | `team activity sync` (silent) · `team activity sync publish` · `team activity sync publish-all` |
+| Boot hydration | `initFromStore()` loads own keys from `seven_notification_events` into `announcedOwnKeys` (90 days) |
 
 Config toggles: `helpers/pusher-config.js` + `PUSHER_*` env vars (see [environment.md](../admin/environment.md)).
 
