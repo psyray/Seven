@@ -17,6 +17,15 @@ const DEFAULT_RECONNECT_CHECK_MS = 60 * 1000
 const DEFAULT_RECONNECT_DELAY_MS = 5000
 const TERMINAL_STATES = ["disconnected", "unavailable", "failed"]
 
+/**
+ * HTB moved its web socket to a self-hosted Pusher-compatible endpoint in November 2026.
+ * The public app key is embedded in the app.hackthebox.com bundle; override both values
+ * with HTB_PUSHER_KEY / HTB_PUSHER_HOST if HTB rotates them again.
+ */
+const DEFAULT_PUSHER_KEY = "239b8f4dc420f11e3fae"
+const DEFAULT_PUSHER_HOST = "ws.prod.htb.systems"
+const DEFAULT_PUSHER_ACTIVITY_TIMEOUT_MS = 20000
+
 const TARGET_LINK_TYPES = [
 	{ match: "starting-point", type: "starting_point" },
 	{ match: "prolabs", type: "prolab" },
@@ -280,23 +289,26 @@ class HtbPusherEvent {
 class HtbPusherSubscription extends EventEmitter {
 	/**
    * Creates a new HtbPusherSubscription object.
-   * @param {string} apiToken - The Pusher Client instance.
    * @param {Object} bindings - An array of channel:event pair objects to subscribe to.
-   * @param {string} bearerToken - HTB v4 app token used for Pusher channel auth.
+   * @param {string} bearerToken - HTB OAuth access token (used for private channel auth).
    * @returns {HtbPusherSubscription}
    */
 
-	constructor(apiToken, bindings, bearerToken) {
+	constructor(bindings, bearerToken) {
 		super()
-		this.apiToken = apiToken
-		this.bindings = bindings
+		this.bindings = bindings || []
 		this.bearerToken = bearerToken
-		this.client = new Pusher(apiToken, {
+		this.pusherKey = (process.env.HTB_PUSHER_KEY || DEFAULT_PUSHER_KEY).trim()
+		this.pusherHost = (process.env.HTB_PUSHER_HOST || DEFAULT_PUSHER_HOST).trim()
+		this.client = new Pusher(this.pusherKey, {
+			host: this.pusherHost,
+			wsPort: 80,
+			wssPort: 443,
+			encrypted: true,
+			activityTimeout: envInt("HTB_PUSHER_ACTIVITY_TIMEOUT_MS", DEFAULT_PUSHER_ACTIVITY_TIMEOUT_MS),
 			authEndpoint: `${HTB_APP_BASE}/pusher/auth`,
 			auth: { Authorization: "Bearer " + bearerToken },
 			authTransport: "ajax",
-			cluster: "eu",
-			encrypted: true
 		})
 		this.channels = []
 		this.reconnectCheckMs = envInt("PUSHER_RECONNECT_CHECK_MS", DEFAULT_RECONNECT_CHECK_MS)
@@ -306,7 +318,7 @@ class HtbPusherSubscription extends EventEmitter {
 		patchConnectionRetry(this.client)
 		this._bindChannels(bindings)
 
-		log.info("Pusher client initialized", { authEndpoint: `${HTB_APP_BASE}/pusher/auth` })
+		log.info("Pusher client initialized", { host: this.pusherHost, key: this.pusherKey })
 		this.client.connection.bind("state_change", (states) => {
 			log.info(`Client state changed from ${states.previous} to ${states.current}`)
 			if (states.current === "connected") {
@@ -324,32 +336,42 @@ class HtbPusherSubscription extends EventEmitter {
 	}
 
 	_bindChannels(bindings) {
-		for (let i = 0; i < bindings.length; i++) {
-			const binding = bindings[i]
-			var channel = this.client.subscribe(binding.channel)
+		const byChannel = new Map()
+		for (const binding of bindings || []) {
+			if (!byChannel.has(binding.channel)) byChannel.set(binding.channel, [])
+			byChannel.get(binding.channel).push(binding)
+		}
+
+		for (const [channelName, channelBindings] of byChannel) {
+			const channel = this.client.subscribe(channelName)
 			channel.bind("pusher:subscription_succeeded", () => {
-				log.info("Pusher channel subscribed", { channel: binding.channel })
+				log.info("Pusher channel subscribed", { channel: channelName })
 			})
 			channel.bind("pusher:subscription_error", (status) => {
-				log.error("Pusher channel subscription failed", { channel: binding.channel, status })
+				log.error("Pusher channel subscription failed", { channel: channelName, status })
 			})
-			channel.bind(binding.event,
-				(data) => {
+			for (const binding of channelBindings) {
+				channel.bind(binding.event, data => {
 					try {
-						this.alertSeven(parsePusherEvent(data, { channel: binding.channel, event: binding.event }))
+						if (channelName === "general") {
+							this.alertGeneral(binding.event, data)
+							return
+						}
+						this.alertSeven(parsePusherEvent(data, { channel: channelName, event: binding.event }))
 					} catch (error) {
-						log.error("Pusher bind handler failed", { message: error.message })
+						log.error("Pusher bind handler failed", { channel: channelName, event: binding.event, message: error.message })
 					}
-				}
-			)
+				})
+			}
 			this.channels.push(channel)
 		}
 	}
 
 	_resubscribeChannels() {
 		try {
-			for (const binding of this.bindings) {
-				this.client.unsubscribe(binding.channel)
+			const names = new Set((this.bindings || []).map(binding => binding.channel))
+			for (const name of names) {
+				this.client.unsubscribe(name)
 			}
 			this.channels = []
 			this._bindChannels(this.bindings)
@@ -357,6 +379,33 @@ class HtbPusherSubscription extends EventEmitter {
 		} catch (error) {
 			log.warn("Pusher resubscribe failed", { message: error.message })
 		}
+	}
+
+	/**
+	 * HTB's self-hosted socket publishes JSON on the public `general` channel:
+	 * `blood-created` ({ message, userId }) and `notify-all-users` ({ data: { message } }).
+	 * Team owns are not published there any more; they come from the team activity API.
+	 * @param {string} event
+	 * @param {object} data
+	 */
+	alertGeneral(event, data) {
+		if (event === "blood-created") {
+			const payload = {
+				uid: Number(data?.userId) || null,
+				message: String(data?.message || ""),
+				raw: data,
+			}
+			log.info("Pusher blood event received", {
+				uid: payload.uid,
+				message: payload.message.slice(0, 200),
+			})
+			this.emit("blood", payload)
+			return
+		}
+		log.info("Pusher general event received", {
+			event,
+			data: JSON.stringify(data ?? null).slice(0, 300),
+		})
 	}
 
 	/**

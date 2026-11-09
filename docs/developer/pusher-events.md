@@ -1,167 +1,58 @@
-# HTB Pusher event formats
+# HTB socket event formats
 
-> **Legacy feed (November 2026).** HTB moved its web socket off this app: the frontend now connects to
-> `wss://ws.prod.htb.systems` with app key `239b8f4dc420f11e3fae` and JSON payloads. The new channels are
-> `general` (`blood-created`, `notify-all-users`, notices), `TEAMS_<teamId>` (membership events only),
-> `private-<userId>` and `private-machine-<id>-<x>`. There is **no global owns channel** any more, so team
-> owns are announced from `GET team/activity/<teamId>` (see `docs/admin/operations.md`). Seven still
-> subscribes to the old channels below, which no longer receive traffic.
+> **November 2026 migration.** HTB moved its web socket to a self-hosted Pusher-compatible endpoint:
+> `wss://ws.prod.htb.systems`, app key `239b8f4dc420f11e3fae`, JSON payloads. Seven connects there
+> (`HTB_PUSHER_HOST` / `HTB_PUSHER_KEY` override both values) and subscribes to the public `general`
+> channel. There is **no global owns channel** any more: `TEAMS_<teamId>` only carries membership
+> events, so team owns are announced from `GET team/activity/<teamId>` by the notification router
+> (see `docs/admin/operations.md`).
 
-Seven subscribes to HTB public Pusher channels (`helpers/pusher-htb.js`) and parses HTML payloads into structured `HtbPusherEvent` objects.
-
-Collect live samples with `IS_DEV_INSTANCE=true` — events append to `LOG_DIR/PUSHER_MSG_LOG.json` (Docker: `/var/log/sevenbot/PUSHER_MSG_LOG.json`) or `./cache/PUSHER_MSG_LOG.json` locally.
-
-## Channels
+## Channels used by Seven
 
 | Channel | Event | Purpose |
 |---------|-------|---------|
-| `owns-channel` | `display-info` | Machine/challenge/lab owns, first blood |
-| `infobox-channel` | `display-info` | Machine launches (`mass-powering`), retirements |
-| `notifications-channel` | `display-notifications` | Badges, respects, rank milestones |
-| `joins-channel` | `display-info` | New HTB account registrations |
-| `shoutbox-channel` | `display-shout` | Global shoutbox (opt-in only) |
+| `general` | `blood-created` | Global first blood, payload `{ message, userId }` |
+| `general` | `notify-all-users` | Site-wide notice, payload `{ data: { message } }` (logged only) |
 
-Auth: `POST ${HTB_APP_BASE}/pusher/auth` with Bearer `HTB_V4_TOKEN`.
+Other channels exposed by the HTB app, not used by Seven:
+
+| Channel | Events |
+|---------|--------|
+| `TEAMS_<teamId>` | `join-request`, `accept-join-request`, `reject-invitation`, `user-left`, `kick-user`, `make-captain` |
+| `private-<userId>` | personal notices, `machine-state`, Flock/Pwnbox events |
+| `private-machine-<id>-<x>` | per-machine state |
+
+## First blood routing
+
+```
+HtbPusherSubscription 'blood' event  [pusher-htb.js]
+  → NotificationRouter.handleBloodCreated({ uid, message })
+  → helpers/blood-parser.js resolves the machine/challenge name against the in-memory catalog
+  → handleOwnEvent({ blood: true, type, target, flag })
+```
+
+The parser returns `null` for ambiguous messages (no catalog match, or a machine blood without a
+`user`/`root`/`system` word). Those events are logged and left to the team activity fallback, which
+carries structured fields and shares the same `ownAnnouncementKey` dedup key, so an own can never be
+announced twice.
+
+## Legacy HTML feed
+
+The previous SaaS feed (`ws-eu.pusher.com`, key `97608bf7532e6f0fe898`) and its HTML payloads
+(`owns-channel`, `infobox-channel`, `notifications-channel`, `joins-channel`, `shoutbox-channel`)
+no longer carry traffic. The parsing helpers (`parsePusherEvent`, `HtbPusherEvent`) are kept for the
+parser smoke tests and for any private deployment that still receives those payloads.
+
+Collect raw socket payloads with `IS_DEV_INSTANCE=true` — `pusherevent` objects append to
+`LOG_DIR/PUSHER_MSG_LOG.json` (Docker: `/var/log/sevenbot/PUSHER_MSG_LOG.json`). Blood payloads are
+logged by `pusher-htb` (`Pusher blood event received`).
+
+Auth: private channels use `POST ${HTB_APP_BASE}/pusher/auth` with Bearer `HTB_V4_TOKEN`; the public
+`general` channel needs no authorization.
 
 ## Runtime routing (`NotificationRouter`)
 
 ```
 HtbPusherSubscription [pusher-htb.js]
   → NotificationRouter.handlePusherEvent()
-    → handleOwnEvent / handleLaunchEvent / handleTeamNotification / handleDefaultEvent
-    → sendAnnouncement() → DISCORD_ANNOUNCE_CHAN (discord.js v12: { embed, allowedMentions })
-    → recordEvent() → NotificationStore → seven_notification_events
-    → integratePusherOwn/Blood + debounced updateCache (skipped on forceRepost)
 ```
-
-| Mechanism | Purpose |
-|-----------|---------|
-| Announce queue | Buffers embeds until Discord channel is ready (`client.on("ready")`) |
-| `announcedOwnKeys` | In-memory dedup for fallback poll (not cleared by HTB cache refresh) |
-| Fallback poll | `getRecentTeamActivityForFallback()` via `team/activity` every `PUSHER_FALLBACK_POLL_MS` (even when Pusher healthy) |
-| Reconnect catch-up | After Pusher down ≥15s, one-shot activity poll |
-| Channel resubscribe | On `disconnected → connected`, re-subscribes all Pusher channels |
-| Admin status | `seven pusher status` — connection, queue, fallback poll stats |
-| Captain recovery | `seven pusher history` / `seven pusher repost last\|<id>` |
-| Captain bootstrap | `team activity sync` (silent) · `team activity sync publish` · `team activity sync publish-all` |
-| Boot hydration | `initFromStore()` loads own keys from `seven_notification_events` into `announcedOwnKeys` (90 days) |
-
-Config toggles: `helpers/pusher-config.js` + `PUSHER_*` env vars (see [environment.md](../admin/environment.md)).
-
-## Parsed fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `uid` | number | HTB user id from first profile link |
-| `type` | string | `machine`, `challenge`, `endgame`, `fortress`, `prolab`, `starting_point`, `launch`, `badge`, `respect`, `rank_up`, `join`, `notification` |
-| `target` | string | Entity name (machine, challenge, lab, …) |
-| `flag` | string | `user`, `root`, `challenge`, or flag title for labs |
-| `blood` | boolean | First blood marker (`span.text-danger` + `1st blood`) |
-| `markdown` | string | Turndown conversion of HTML (debug / fallback embed) |
-
-## Sample HTML (owns-channel)
-
-### Machine user own
-
-```html
-<a href="https://app.hackthebox.com/users/12345">Alice</a> owned user on <a href="https://app.hackthebox.com/machines/456">Lame</a>
-```
-
-Expected: `{ uid: 12345, type: "machine", target: "Lame", flag: "user", blood: false }`
-
-### Machine root own + first blood
-
-```html
-<a href="https://app.hackthebox.com/users/12345">Alice</a> owned <span class="text-danger">1st blood</span> root on <a href="https://app.hackthebox.com/machines/456">Lame</a>
-```
-
-Expected: `{ uid: 12345, type: "machine", target: "Lame", flag: "root", blood: true }`
-
-### Challenge solve
-
-```html
-<a href="https://app.hackthebox.com/users/12345">Alice</a> solved <a href="https://app.hackthebox.com/challenge/789">Emission</a>
-```
-
-Expected: `{ uid: 12345, type: "challenge", target: "Emission", flag: "challenge", blood: false }`
-
-### Fortress flag
-
-```html
-<a href="https://app.hackthebox.com/users/12345">Alice</a> got flag <strong>Entry Point</strong> on <a href="https://app.hackthebox.com/fortress/12">Akerva</a>
-```
-
-Expected: `{ uid: 12345, type: "fortress", target: "Akerva", flag: "Entry Point", blood: false }`
-
-### Endgame flag
-
-```html
-<a href="https://app.hackthebox.com/users/12345">Alice</a> captured flag <strong>Flag 1</strong> on <a href="https://app.hackthebox.com/endgame/3">P.O.O.</a>
-```
-
-Expected: `{ uid: 12345, type: "endgame", target: "P.O.O.", flag: "Flag 1", blood: false }`
-
-### Pro Lab milestone
-
-```html
-<a href="https://app.hackthebox.com/users/12345">Alice</a> got flag <strong>DEV</strong> on <a href="https://app.hackthebox.com/prolabs/5">Offshore</a>
-```
-
-Expected: `{ uid: 12345, type: "prolab", target: "Offshore", flag: "DEV", blood: false }`
-
-### Starting Point
-
-```html
-<a href="https://app.hackthebox.com/users/12345">Alice</a> owned user on <a href="https://app.hackthebox.com/starting-point/1">Meow</a>
-```
-
-Expected: `{ uid: 12345, type: "starting_point", target: "Meow", flag: "user", blood: false }`
-
-### Machine launch (infobox-channel)
-
-```html
-<span data="Lame">mass-powering</span> a new machine is going live
-```
-
-Expected: `{ type: "launch", target: "Lame" }`
-
-## Sample HTML (notifications-channel)
-
-### Badge
-
-```html
-<a href="https://app.hackthebox.com/users/12345">Alice</a> earned the badge <strong>Machine Maker</strong>
-```
-
-Expected: `{ uid: 12345, type: "badge", target: "Machine Maker" }`
-
-### Respect
-
-```html
-<a href="https://app.hackthebox.com/users/12345">Alice</a> received respect from <a href="https://app.hackthebox.com/users/99999">Bob</a>
-```
-
-Expected: `{ uid: 12345, type: "respect" }`
-
-## Dev workflow
-
-1. Set `IS_DEV_INSTANCE=true` in `.env`
-2. Ensure dev log path is writable (`LOG_DIR` in Docker, `./cache/` locally)
-3. Run bot; owns append to the log file
-4. Replay samples: `npm run test:pusher`
-
-## Persistence (`seven_notification_events`)
-
-`NotificationRouter.recordEvent()` writes every handled Pusher/fallback event to Postgres via `helpers/notification-store.js`:
-
-| Column | Content |
-|--------|---------|
-| `uid`, `member_name` | HTB member |
-| `event_type`, `target`, `flag`, `blood` | Parsed own/notification |
-| `channel`, `source` | Pusher channel name |
-| `note` | e.g. `announced own`, `skipped: …`, `reposted own` |
-| `announced` | Whether embed was sent to `DISCORD_ANNOUNCE_CHAN_ID` |
-
-Captain commands (local NLP, no Dialogflow): `seven pusher history [member]`, `seven pusher repost last|<id>`. Repost rebuilds the message from DB and calls `handleOwnEvent({ forceRepost: true })` — skips `integratePusherOwn/Blood` to avoid double-counting stats.
-
-See also [`docs/user/notifications.md`](../user/notifications.md).

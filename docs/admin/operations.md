@@ -126,7 +126,7 @@ Captain only (`CAPTAIN_DISCORD_IDS`). Reads persisted rows from `seven_notificat
 
 ## Real-time notifications (Pusher)
 
-Seven announces team owns (and global first blood) on `DISCORD_ANNOUNCE_CHAN_ID` via HTB Pusher. See [developer/pusher-events.md](../developer/pusher-events.md) for HTML formats.
+Seven announces team owns on `DISCORD_ANNOUNCE_CHAN_ID` from the HTB team activity API, plus global first bloods from HTB's web socket. See [developer/pusher-events.md](../developer/pusher-events.md) for the payload formats.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
@@ -141,14 +141,17 @@ Seven announces team owns (and global first blood) on `DISCORD_ANNOUNCE_CHAN_ID`
 | `PUSHER_ANNOUNCE_JOINS` | `false` | HTB account join notifications |
 | `PUSHER_DB_PERSIST_DEBOUNCE_MS` | `30000` | Delay before writing Pusher cache updates to Postgres |
 | `PUSHER_FALLBACK_POLL_MS` | `300000` | Poll `team/activity` for recent owns (runs even when Pusher is healthy) |
-| `PUSHER_RECONNECT_CHECK_MS` | `60000` | Watchdog interval reconnecting a dead Pusher socket or a non-connected client |
+| `PUSHER_RECONNECT_CHECK_MS` | `60000` | Watchdog interval that reconnects a dead Pusher socket or a non-connected client |
 | `PUSHER_RECONNECT_DELAY_MS` | `5000` | Delay before the automatic reconnect that follows a socket close |
+| `HTB_PUSHER_HOST` | `ws.prod.htb.systems` | HTB web socket host (self-hosted Pusher endpoint since November 2026) |
+| `HTB_PUSHER_KEY` | `239b8f4dc420f11e3fae` | HTB web socket app key (public, embedded in the HTB frontend bundle) |
+| `HTB_PUSHER_ACTIVITY_TIMEOUT_MS` | `20000` | Socket keepalive ping interval (HTB advertises 20 s) |
 
 **Troubleshooting:**
 
 - No live announces but bot online → run `seven pusher status`; check `HTB_V4_TOKEN` (Pusher auth uses the same Bearer token)
 - State stuck on `disconnected` / `unavailable` → run `seven pusher reconnect` (the watchdog retries every minute anyway)
-- No announce at all since November 2026 → HTB moved its web socket to `ws.prod.htb.systems` (new app key, JSON events, no global owns channel). Team owns are now announced from `GET team/activity/<teamId>`: the router polls it every `PUSHER_FALLBACK_POLL_MS` over a 24 h window and always asks for at least `n_past_days=2`, because HTB serves `n_past_days=1` stale (it omits the most recent owns)
+- No announce at all since November 2026 → HTB moved its web socket to `ws.prod.htb.systems` (new app key, JSON events, no global owns channel). Seven subscribes to the public `general` channel for `blood-created` only; team owns are announced from `GET team/activity/<teamId>`. The router polls it every `PUSHER_FALLBACK_POLL_MS` over a 24 h window and always asks for at least `n_past_days=2`, because HTB serves `n_past_days=1` stale (it omits the most recent owns)
 - Missed events after outage → the 24 h fallback re-scan catches them as soon as HTB exposes them; captain runs `seven pusher history` and `seven pusher repost <id>` if an event was already recorded
 - Own missed before the last restart → the fallback watermark starts at boot, so older owns are not replayed; captain runs `team activity sync publish <n>`
 - Own missed while Pusher was down for hours → the 15-minute fallback window cannot replay it; captain runs `team activity sync publish 1` (or more) to announce the recent missing owns from the HTB team activity API
