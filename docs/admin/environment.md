@@ -45,6 +45,8 @@ Optional tuning for real-time own announcements. Defaults enable all own types e
 | `PUSHER_ANNOUNCE_SHOUTBOX` | `false` | Global shoutbox relay |
 | `PUSHER_DB_PERSIST_DEBOUNCE_MS` | `30000` | Debounce before Postgres persist of HTB cache after owns |
 | `PUSHER_FALLBACK_POLL_MS` | `300000` | Member activity poll interval (runs even when Pusher is healthy) |
+| `PUSHER_RECONNECT_CHECK_MS` | `60000` | Watchdog interval that reconnects a dead Pusher socket or a non-connected client |
+| `PUSHER_RECONNECT_DELAY_MS` | `5000` | Delay before the automatic reconnect that follows a socket close |
 
 Notification events are stored automatically in Postgres table `seven_notification_events` (no env var). Captain commands: `seven pusher history`, `seven pusher repost last|<id>`. See [operations.md](operations.md).
 

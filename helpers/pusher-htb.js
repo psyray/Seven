@@ -8,9 +8,14 @@ const Pusher = require("pusher-client")
 const { Helpers: H } = require("../helpers/helpers.js")
 const { HTB_APP_BASE } = require("../config/htb.js")
 const { createLogger } = require("../helpers/logger.js")
+const { envInt } = require("./pusher-config.js")
 const TD = require("turndown")
 
 const log = createLogger("pusher-htb")
+
+const DEFAULT_RECONNECT_CHECK_MS = 60 * 1000
+const DEFAULT_RECONNECT_DELAY_MS = 5000
+const TERMINAL_STATES = ["disconnected", "unavailable", "failed"]
 
 const TARGET_LINK_TYPES = [
 	{ match: "starting-point", type: "starting_point" },
@@ -30,6 +35,33 @@ Pusher.warn = function (...args) {
 		return
 	}
 	pusherWarn(...args)
+}
+
+/**
+ * pusher-client@1.1.0 never recovers from an unexpected socket close: its
+ * `Connection#handleError()` ignores codes 1000/1001/1005/1006 (the socket is
+ * abandoned but the state stays `connected`, so no event is ever delivered again)
+ * and calls `disconnect()` for 4000-4099 / >= 4300 (the state stays `disconnected`
+ * for good). A long-running listener must retry instead, so replace the handler.
+ * Verified against ws 7 and ws 8: both dispatch a CloseEvent with a numeric code,
+ * so pinning the ws version does not change this behaviour.
+ * @param {Object} client - Pusher client instance.
+ * @returns {boolean} Whether the patch was applied.
+ */
+function patchConnectionRetry(client) {
+	const proto = Object.getPrototypeOf(client?.connection)
+	if (!proto || proto.__sevenRetryPatched) return false
+	proto.handleError = function (code, message) {
+		// Backoff is linear (1s, 2s, 3s, …) and resets on the next successful handshake.
+		this.retryIn(1000, true)
+		this.emit("error", {
+			type: "WebSocketError",
+			error: Number.isFinite(Number(code)) ? message : `Unknown socket error: ${code} ${message}`,
+		})
+	}
+	proto.__sevenRetryPatched = true
+	log.info("Pusher client close handler patched to always retry")
+	return true
 }
 
 function cleanAttribute (attribute) {
@@ -267,16 +299,28 @@ class HtbPusherSubscription extends EventEmitter {
 			encrypted: true
 		})
 		this.channels = []
+		this.reconnectCheckMs = envInt("PUSHER_RECONNECT_CHECK_MS", DEFAULT_RECONNECT_CHECK_MS)
+		this.reconnectDelayMs = envInt("PUSHER_RECONNECT_DELAY_MS", DEFAULT_RECONNECT_DELAY_MS)
+		this.retryTimer = null
+		this.watchdogTimer = null
+		patchConnectionRetry(this.client)
 		this._bindChannels(bindings)
 
 		log.info("Pusher client initialized", { authEndpoint: `${HTB_APP_BASE}/pusher/auth` })
 		this.client.connection.bind("state_change", (states) => {
 			log.info(`Client state changed from ${states.previous} to ${states.current}`)
+			if (states.current === "connected") {
+				this._attachActivityHandlers()
+			}
 			if (states.current === "connected" && states.previous === "disconnected") {
 				this._resubscribeChannels()
 			}
+			if (TERMINAL_STATES.includes(states.current)) {
+				this._scheduleReconnect()
+			}
 			this.emit("state_change", states)
 		})
+		this.startConnectionWatchdog()
 	}
 
 	_bindChannels(bindings) {
@@ -335,6 +379,83 @@ class HtbPusherSubscription extends EventEmitter {
 
 	getConnectionState() {
 		return this.client?.connection?.state || "unknown"
+	}
+
+	/**
+	 * Safety net for `patchConnectionRetry()`: forces a fresh socket whenever the client is
+	 * not healthy, including the zombie case where the state still reads `connected`
+	 * while the ws socket was abandoned. Also backs the admin `pusher reconnect` command.
+	 * @param {Object} [options]
+	 * @param {boolean} [options.force] - Tear down the current socket even while healthy.
+	 * @returns {boolean} Whether a reconnect attempt was started.
+	 */
+	reconnect({ force = false } = {}) {
+		const state = this.getConnectionState()
+		if (!force && (this._hasLiveSocket() || state === "connecting")) return false
+		try {
+			log.warn("Pusher reconnecting", { state, live: this._hasLiveSocket(), force })
+			this.client.disconnect()
+			this.client.connect()
+			this._clearRetryTimer()
+			return true
+		} catch (error) {
+			log.error("Pusher reconnect failed", { state, message: error.message })
+			return false
+		}
+	}
+
+	/**
+	 * pusher-client registers its `ping` / `pong` handlers with addEventListener(), which ws
+	 * only dispatches for open/message/error/close. Without a pong the activity check tears
+	 * the socket down every activity_timeout + pongTimeout (~150s) when the feed is quiet, so
+	 * bind them natively to reset the timer instead.
+	 */
+	_attachActivityHandlers() {
+		const connection = this.client?.connection
+		const socket = connection?.connection
+		if (!socket || socket.__sevenActivityBound) return
+		socket.__sevenActivityBound = true
+		const reset = () => connection.resetActivityCheck()
+		socket.on("ping", reset)
+		socket.on("pong", reset)
+		log.debug("Pusher ping/pong handlers bound to the activity check")
+	}
+
+	/** A `connected` client whose socket was abandoned after a close reports `connected` but has no live ws. */
+	_hasLiveSocket() {
+		const socket = this.client?.connection?.connection
+		return Boolean(socket) && socket.readyState === 1 // ws.OPEN
+	}
+
+	_scheduleReconnect() {
+		if (this.retryTimer) return
+		this.retryTimer = setTimeout(() => {
+			this.retryTimer = null
+			this.reconnect()
+		}, this.reconnectDelayMs)
+		if (typeof this.retryTimer.unref === "function") this.retryTimer.unref()
+	}
+
+	_clearRetryTimer() {
+		if (!this.retryTimer) return
+		clearTimeout(this.retryTimer)
+		this.retryTimer = null
+	}
+
+	startConnectionWatchdog() {
+		if (this.watchdogTimer) return
+		this.watchdogTimer = setInterval(() => {
+			this.reconnect()
+		}, this.reconnectCheckMs)
+		if (typeof this.watchdogTimer.unref === "function") this.watchdogTimer.unref()
+		log.info("Pusher connection watchdog started", { checkMs: this.reconnectCheckMs })
+	}
+
+	stopConnectionWatchdog() {
+		if (!this.watchdogTimer) return
+		clearInterval(this.watchdogTimer)
+		this.watchdogTimer = null
+		this._clearRetryTimer()
 	}
 
 	/**

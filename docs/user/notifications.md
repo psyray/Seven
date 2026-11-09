@@ -63,6 +63,7 @@ Admins can still run `seven pusher status` for live Pusher connection diagnostic
 | Wrong person pinged | Stale Discord link — unlink and re-link |
 | Lab owns missing | Rare HTML format change — captain/admin checks `seven pusher status`; captain may `seven pusher repost last` |
 | Own happened but no Discord post | Pusher silent or channel not ready — captain: `seven pusher history` then `seven pusher repost <id>` |
+| Own during a Pusher outage (not in history) | Captain: `seven pusher history` first; if absent, run `team activity sync publish 1` to announce the most recent missing owns from the HTB team activity API |
 
 For server-side issues (Pusher disconnect, token expiry), contact your admin or see [admin/operations.md](../admin/operations.md).
 

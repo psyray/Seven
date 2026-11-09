@@ -1133,6 +1133,24 @@ async function admin_clearCached(message) {
 
 const checkIsSevenMsg = /[\t ]?seven\W?/gi
 
+async function admin_pusherReconnect(message) {
+	if (!isAdmin(message.author)) {
+		await SEND.human(message, "Sorry, not for you.")
+		return
+	}
+	const before = HTB_PUSHER_OWNS_SUBSCRIPTION?.getConnectionState?.() || "unknown"
+	const started = HTB_PUSHER_OWNS_SUBSCRIPTION?.reconnect?.({ force: true }) || false
+	log.warn("Admin Pusher reconnect requested", { user: message.author.id, before, started })
+	const after = HTB_PUSHER_OWNS_SUBSCRIPTION?.getConnectionState?.() || "unknown"
+	await SEND.human(
+		message,
+		started
+			? `Pusher reconnect requested (was \`${before}\`). State now: \`${after}\` — re-run \`pusher status\` in a few seconds.`
+			: `Pusher reconnect could not start (state \`${before}\`). Check logs.`,
+		!started
+	)
+}
+
 function logSmokeResult(smokeId, meta) {
 	if (!smokeId || process.env.SMOKE_TRACE !== "1") return
 	console.log(`[SMOKE] result ${JSON.stringify({ smokeId, ...meta })}`)
@@ -1319,6 +1337,7 @@ async function handleMessage(message) {
 						case "admin.clearCached": await admin_clearCached(message); break
 						case "admin.htbTokenStatus": await admin_htbTokenStatus(message); break
 						case "admin.pusherStatus": if (isAdmin(message.author)) { SEND.embed(message, NOTIFICATION_ROUTER.getStatusEmbed()) } else { SEND.human(message, "Sorry, not for you.") } break
+						case "admin.pusherReconnect": await admin_pusherReconnect(message); break
 						case "captain.pusherHistory": await captainPusherHistory(message, P); break
 						case "captain.pusherRepost": await captainPusherRepost(message, P); break
 						case "captain.teamActivitySync": await captainTeamActivitySync(message, P); break
@@ -1449,6 +1468,9 @@ async function handleMessage(message) {
 							} else {
 								await SEND.human(message, "Sorry, not for you.")
 							}
+							break
+						case "admin.pusherReconnect":
+							await admin_pusherReconnect(message)
 							break
 						case "getTeamInfo":
 							SEND.embed(message, EGI.teamInfo())

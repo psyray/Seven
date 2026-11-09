@@ -205,6 +205,7 @@ Available to admins only (use **DM** for token commands — refresh tokens are l
 - `htb token set <access_jwt> <refresh>` — hot-reload full OAuth pair without restart (recommended; one line or two lines)
 - Legacy alias: `set htb tokens <access_jwt> <refresh>` (pair only)
 - `pusher status` — Pusher connection, announce queue, recent events
+- `pusher reconnect` — force an immediate Pusher socket reconnect (the watchdog also retries every minute)
 - `clear cache` — wipe memory + delta bootstrap from HTB API
 - `set status …` — Discord status/activity
 - `setup emoji` / `clear emoji` — HTB custom emoji on guild
