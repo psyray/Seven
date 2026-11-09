@@ -114,14 +114,21 @@ Dialogflow may still supply `targetFilterBasis` (e.g. `blang: "Active Directory"
 
 ## Pusher real-time notifications
 
+HTB's web socket now lives at `ws.prod.htb.systems` (app key `239b8f4dc420f11e3fae`, JSON payloads) and
+only exposes the public `general` channel (`blood-created`, `notify-all-users`). There is no global
+owns channel: team owns come from `team/activity` polling.
+
 ```
-HTB Pusher → parsePusherEvent [pusher-htb.js]
-  → NotificationRouter.handlePusherEvent [notification-router.js]
-    → ensureCachedTarget if target missing from cache
-    → recordEvent → NotificationStore.append [notification-store.js → seven_notification_events]
-    → HtbEmbeds.pusherOwn / pusherNotif / pusherTeamNotification
-    → DISCORD_ANNOUNCE_CHAN (with allowedMentions for linked users)
-    → integratePusherOwn/Blood + debounced updateCache (skipped on forceRepost)
+HTB socket 'blood-created' → NotificationRouter.handleBloodCreated [notification-router.js]
+  → resolveBloodTarget(message, catalog) [blood-parser.js] — null = leave to the API fallback
+  → handleOwnEvent({ blood: true }) → same pipeline as below
+
+team/activity poll → NotificationRouter.handleOwnEvent (24 h window, n_past_days>=2)
+  → ensureCachedTarget if target missing from cache
+  → recordEvent → NotificationStore.append [notification-store.js → seven_notification_events]
+  → HtbEmbeds.pusherOwn / pusherNotif / pusherTeamNotification
+  → DISCORD_ANNOUNCE_CHAN (with allowedMentions for linked users)
+  → integratePusherOwn/Blood + debounced updateCache (skipped on forceRepost)
 ```
 
 When extending notification types:

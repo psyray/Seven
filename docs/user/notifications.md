@@ -4,9 +4,9 @@ Seven can post real-time HTB achievement announcements to a configured Discord c
 
 ## How it works
 
-Seven subscribes to HTB's public Pusher feed (`helpers/pusher-htb.js`) and routes events through `helpers/notification-router.js`. When an event concerns a member of your team (or a global first blood), Seven posts a formatted embed to the **announce channel** configured by your admin (`DISCORD_ANNOUNCE_CHAN_ID`).
+Seven subscribes to HTB's web socket (`helpers/pusher-htb.js`) for global first bloods and routes every event through `helpers/notification-router.js`. Team owns (user/root flags, challenges, lab flags) are read from the HTB team activity API. When an event concerns a member of your team (or a global first blood), Seven posts a formatted embed to the **announce channel** configured by your admin (`DISCORD_ANNOUNCE_CHAN_ID`).
 
-If Pusher disconnects or HTB stops pushing live events, Seven polls `team/activity` on a schedule (`getRecentTeamActivityForFallback`).
+If the socket disconnects or HTB stops pushing live events, Seven polls `team/activity` on a schedule (`getRecentTeamActivityForFallback`) over a 24 h window.
 
 Every processed event (announced, skipped, or failed) is **persisted in Postgres** (`seven_notification_events`) so captains can review history and force a repost when something was missed.
 

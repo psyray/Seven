@@ -558,13 +558,10 @@ async function main() {
 		}
 	}
 	setupHtbTokenFileWatcher()
-	HTB_PUSHER_OWNS_SUBSCRIPTION = new HtbPusherSubscription("97608bf7532e6f0fe898",
+	HTB_PUSHER_OWNS_SUBSCRIPTION = new HtbPusherSubscription(
 		[
-			{ channel: "owns-channel", event: "display-info" },
-			{ channel: "notifications-channel", event: "display-notifications" },
-			{ channel: "infobox-channel", event: "display-info" },
-			{ channel: "shoutbox-channel", event: "display-shout" },
-			{ channel: "joins-channel", event: "display-info" }
+			{ channel: "general", event: "blood-created" },
+			{ channel: "general", event: "notify-all-users" },
 		], DAT.V4API.getApiToken())
 
 	NOTIFICATION_ROUTER = new NotificationRouter({
@@ -584,6 +581,10 @@ async function main() {
 			fs.writeFileSync(PUSHER_MSG_LOG_PATH, JSON.stringify(PUSHER_MSG_LOG, null, 2))
 		}
 		await NOTIFICATION_ROUTER.handlePusherEvent(message)
+	})
+
+	HTB_PUSHER_OWNS_SUBSCRIPTION.on("blood", async payload => {
+		await NOTIFICATION_ROUTER.handleBloodCreated(payload)
 	})
 
 	HTB_PUSHER_OWNS_SUBSCRIPTION.on("state_change", states => {

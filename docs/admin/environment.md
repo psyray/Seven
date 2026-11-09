@@ -47,6 +47,9 @@ Optional tuning for real-time own announcements. Defaults enable all own types e
 | `PUSHER_FALLBACK_POLL_MS` | `300000` | Member activity poll interval (runs even when Pusher is healthy) |
 | `PUSHER_RECONNECT_CHECK_MS` | `60000` | Watchdog interval that reconnects a dead Pusher socket or a non-connected client |
 | `PUSHER_RECONNECT_DELAY_MS` | `5000` | Delay before the automatic reconnect that follows a socket close |
+| `HTB_PUSHER_HOST` | `ws.prod.htb.systems` | HTB web socket host (self-hosted Pusher endpoint) |
+| `HTB_PUSHER_KEY` | `239b8f4dc420f11e3fae` | HTB web socket app key (public, from the HTB frontend bundle) |
+| `HTB_PUSHER_ACTIVITY_TIMEOUT_MS` | `20000` | Socket keepalive ping interval |
 
 Notification events are stored automatically in Postgres table `seven_notification_events` (no env var). Captain commands: `seven pusher history`, `seven pusher repost last|<id>`. See [operations.md](operations.md).
 

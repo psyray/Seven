@@ -4,6 +4,7 @@
  */
 const { createLogger } = require("./logger.js")
 const { getPusherNotificationConfig } = require("./pusher-config.js")
+const { resolveBloodTarget } = require("./blood-parser.js")
 const { wait } = require("./helpers.js")
 
 const log = createLogger("notification-router")
@@ -514,6 +515,46 @@ class NotificationRouter {
 			mentionUserIds,
 		})
 		await this.recordEvent(message, "announced default")
+	}
+
+	/**
+	 * HTB `general` channel `blood-created` handler. The socket payload is
+	 * `{ message, userId }`; the target is resolved against the in-memory catalog
+	 * so the announcement shares the same dedup key as the team activity fallback.
+	 * Unresolvable messages are skipped and left to the fallback.
+	 * @param {{ uid: number|null, message: string, raw?: object }} payload
+	 */
+	async handleBloodCreated(payload) {
+		const uid = Number(payload?.uid)
+		if (!uid || !payload?.message) return
+		const resolved = resolveBloodTarget(payload.message, {
+			machines: this.dat.MACHINES,
+			challenges: this.dat.CHALLENGES,
+		})
+		if (!resolved) {
+			log.info("Blood event skipped — target not resolved", {
+				uid,
+				message: String(payload.message).slice(0, 200),
+			})
+			return
+		}
+		log.info("Blood event resolved", { uid, ...resolved })
+		try {
+			await this.handleOwnEvent({
+				uid,
+				time: Date.now(),
+				type: resolved.type,
+				target: resolved.target,
+				flag: resolved.flag,
+				blood: true,
+				channel: "general",
+				event: "blood-created",
+				markdown: payload.message,
+				debug: payload.raw,
+			})
+		} catch (error) {
+			log.error("Blood event handler failed", { uid, message: error.message, stack: error.stack })
+		}
 	}
 
 	async handlePusherEvent(message) {
