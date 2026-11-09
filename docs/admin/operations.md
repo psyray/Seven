@@ -148,7 +148,9 @@ Seven announces team owns (and global first blood) on `DISCORD_ANNOUNCE_CHAN_ID`
 
 - No live announces but bot online → run `seven pusher status`; check `HTB_V4_TOKEN` (Pusher auth uses the same Bearer token)
 - State stuck on `disconnected` / `unavailable` → run `seven pusher reconnect` (the watchdog retries every minute anyway)
-- Missed events after outage → fallback poll catches up; captain runs `seven pusher history` and `seven pusher repost <id>` if needed
+- No announce at all since November 2026 → HTB moved its web socket to `ws.prod.htb.systems` (new app key, JSON events, no global owns channel). Team owns are now announced from `GET team/activity/<teamId>`: the router polls it every `PUSHER_FALLBACK_POLL_MS` over a 24 h window and always asks for at least `n_past_days=2`, because HTB serves `n_past_days=1` stale (it omits the most recent owns)
+- Missed events after outage → the 24 h fallback re-scan catches them as soon as HTB exposes them; captain runs `seven pusher history` and `seven pusher repost <id>` if an event was already recorded
+- Own missed before the last restart → the fallback watermark starts at boot, so older owns are not replayed; captain runs `team activity sync publish <n>`
 - Own missed while Pusher was down for hours → the 15-minute fallback window cannot replay it; captain runs `team activity sync publish 1` (or more) to announce the recent missing owns from the HTB team activity API
 - Target/member not resolved on repost → Pusher auto-fetches missing targets via `ensureCachedTarget`; retry repost if needed
 - Collect raw payloads in staging → set `IS_DEV_INSTANCE=true` and inspect `LOG_DIR/PUSHER_MSG_LOG.json` (Docker volume `seven_logs`) or `cache/PUSHER_MSG_LOG.json` locally

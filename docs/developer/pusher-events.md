@@ -1,5 +1,12 @@
 # HTB Pusher event formats
 
+> **Legacy feed (November 2026).** HTB moved its web socket off this app: the frontend now connects to
+> `wss://ws.prod.htb.systems` with app key `239b8f4dc420f11e3fae` and JSON payloads. The new channels are
+> `general` (`blood-created`, `notify-all-users`, notices), `TEAMS_<teamId>` (membership events only),
+> `private-<userId>` and `private-machine-<id>-<x>`. There is **no global owns channel** any more, so team
+> owns are announced from `GET team/activity/<teamId>` (see `docs/admin/operations.md`). Seven still
+> subscribes to the old channels below, which no longer receive traffic.
+
 Seven subscribes to HTB public Pusher channels (`helpers/pusher-htb.js`) and parses HTML payloads into structured `HtbPusherEvent` objects.
 
 Collect live samples with `IS_DEV_INSTANCE=true` — events append to `LOG_DIR/PUSHER_MSG_LOG.json` (Docker: `/var/log/sevenbot/PUSHER_MSG_LOG.json`) or `./cache/PUSHER_MSG_LOG.json` locally.

@@ -23,6 +23,12 @@ const SYNC_SEND_MAX_RETRIES = 3
 const PUSHER_CATCHUP_MIN_DOWN_MS = 15000
 /** Alert admins only if Pusher stays unhealthy this long. */
 const PUSHER_DISCONNECT_ALERT_MS = 60000
+/**
+ * Team activity re-scan window. HTB's team/activity endpoint lags behind live owns
+ * (and n_past_days=1 is served stale), so a short lookback drops owns permanently.
+ * Already announced owns are filtered by ownAnnouncementKey, so re-scanning is safe.
+ */
+const FALLBACK_LOOKBACK_MS = 24 * 60 * 60 * 1000
 
 class NotificationRouter {
 	/**
@@ -682,9 +688,20 @@ class NotificationRouter {
 				skipped++
 				continue
 			}
-			await this.handleOwnEvent(normalized)
+			const result = await this.handleOwnEvent(normalized)
 			this.fallbackWatermark = Math.max(this.fallbackWatermark, normalized.time)
-			announced++
+			if (result?.ok) {
+				announced++
+			} else {
+				failed++
+				log.warn("Fallback own not announced", {
+					uid: normalized.uid,
+					type: normalized.type,
+					target: normalized.target,
+					flag: normalized.flag,
+					reason: result?.reason || "unknown",
+				})
+			}
 		}
 		return { announced, skipped, total: items.length }
 	}
@@ -708,7 +725,7 @@ class NotificationRouter {
 		}
 		this.lastFallbackPollAt = new Date().toISOString()
 		try {
-			const lookbackMs = Math.max(this.config.fallbackPollMs, 15 * 60 * 1000)
+			const lookbackMs = Math.max(this.config.fallbackPollMs, FALLBACK_LOOKBACK_MS)
 			const sinceMs = Date.now() - lookbackMs
 			const items = await this.fetchRecentMemberActivity(sinceMs)
 			this.lastFallbackError = null
