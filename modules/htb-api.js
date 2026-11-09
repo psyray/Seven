@@ -242,9 +242,10 @@ function extractTeamActivityItems(res) {
 	return res?.data || res?.activity || res?.info?.activity || []
 }
 
-function nPastDaysFromSinceMs(sinceMs) {
-	const msBack = sinceMs ? Math.max(Date.now() - sinceMs, 86400000) : 86400000
-	return Math.min(90, Math.max(1, Math.ceil(msBack / 86400000)))
+function nPastDaysFromSinceMs(sinceMs, minPastDays = 1) {
+	const floorDays = Math.max(1, minPastDays)
+	const msBack = sinceMs ? Math.max(Date.now() - sinceMs, floorDays * 86400000) : floorDays * 86400000
+	return Math.min(90, Math.max(floorDays, Math.ceil(msBack / 86400000)))
 }
 
 function isOptionalMemberProfilePath(endpointPath) {
@@ -1402,8 +1403,8 @@ class HtbApiConnector {
 		return this.htbApiGet(`team/activity/${teamId}${query}`)
 	}
 
-	getRecentTeamActivity(teamId, sinceMs = null) {
-		const nPastDays = sinceMs ? nPastDaysFromSinceMs(sinceMs) : null
+	getRecentTeamActivity(teamId, sinceMs = null, { minPastDays = 1 } = {}) {
+		const nPastDays = sinceMs ? nPastDaysFromSinceMs(sinceMs, minPastDays) : null
 		return this.getTeamActivity(teamId, { nPastDays }).then(res => {
 			const items = extractTeamActivityItems(res)
 			if (!sinceMs) return items
@@ -1416,11 +1417,14 @@ class HtbApiConnector {
 
 	/**
 	 * Preferred Pusher fallback: single team/activity call (HTB removed per-user profile/activity in June 2026).
+	 * `n_past_days=1` is served stale by HTB (it omitted owns that `n_past_days=2` and `3` already returned),
+	 * so the fallback always asks for at least 2 days and filters locally.
 	 * @param {number} teamId
 	 * @param {number|null} sinceMs
+	 * @param {{ minPastDays?: number }} [options]
 	 */
-	async getRecentTeamActivityForFallback(teamId, sinceMs = null) {
-		const items = await this.getRecentTeamActivity(teamId, sinceMs)
+	async getRecentTeamActivityForFallback(teamId, sinceMs = null, { minPastDays = 2 } = {}) {
+		const items = await this.getRecentTeamActivity(teamId, sinceMs, { minPastDays })
 		const mapped = []
 		for (const entry of items) {
 			const uid = entry.user?.id ?? entry.user_id

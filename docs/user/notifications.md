@@ -52,7 +52,7 @@ Admins can still run `seven pusher status` for live Pusher connection diagnostic
 - Private or non-team activity (except first blood)
 - Blacklisted members (those who used "forget me" for HTB blacklist)
 - Shoutbox messages (disabled by default)
-- Events missed while the bot is fully offline (partial catch-up on reconnect via API fallback)
+- Events missed while the bot is fully offline (the team activity fallback re-scans 24 h from boot onwards)
 
 ## Troubleshooting (users)
 
