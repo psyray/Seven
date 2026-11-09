@@ -107,6 +107,7 @@ Dialogflow may still supply `targetFilterBasis` (e.g. `blang: "Active Directory"
 | `admin.htbTokenSet` | `admin_htbTokenSet()` | local NLP: `htb token set …` |
 | `admin.htbTokenStatus` | `admin_htbTokenStatus()` | local NLP: `htb token status` |
 | `admin.pusherStatus` | `NOTIFICATION_ROUTER.getStatusEmbed()` | — |
+| `admin.pusherReconnect` | `admin_pusherReconnect()` → `reconnect({ force: true })` | — |
 | `captain.pusherHistory` | `NOTIFICATION_ROUTER.getHistoryEmbed()` | — |
 | `captain.pusherRepost` | `NOTIFICATION_ROUTER.repostToChannel()` | `forceRepost` skips dedup + stat integration |
 | `captain.teamActivitySync` | `computeActivitySyncDiff()` + silent/publish | Silent: cache+DB only; publish: throttled announce |

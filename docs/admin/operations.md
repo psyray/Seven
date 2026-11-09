@@ -106,9 +106,12 @@ Persists to `HTB_TOKEN_FILE` and syncs `HTB_ENV_FILE` when configured (Docker: `
 
 ```
 seven pusher status
+seven pusher reconnect
 ```
 
-Shows Pusher connection state, pending announce queue size, recent in-memory events, and API fallback poll status.
+`seven pusher status` shows Pusher connection state, pending announce queue size, recent in-memory events, and API fallback poll status.
+
+`seven pusher reconnect` forces an immediate teardown/reconnect of the Pusher socket. Recovery is otherwise automatic: `helpers/pusher-htb.js` patches `pusher-client@1.1.0` so every unexpected close is retried with a linear backoff (the library never retried: `1000/1001/1005/1006` left a silent zombie connection and `4xxx` parked it in `disconnected` for good) and binds the `ping`/`pong` events natively (the library registered them with `addEventListener`, which `ws` does not dispatch, so a quiet feed tore the socket down every ~150s). A watchdog also reconnects every `PUSHER_RECONNECT_CHECK_MS` (default 60s) if the socket is dead or the state is not `connected`. Use the command when you do not want to wait.
 
 ### Notification history & repost (captain)
 
@@ -138,11 +141,15 @@ Seven announces team owns (and global first blood) on `DISCORD_ANNOUNCE_CHAN_ID`
 | `PUSHER_ANNOUNCE_JOINS` | `false` | HTB account join notifications |
 | `PUSHER_DB_PERSIST_DEBOUNCE_MS` | `30000` | Delay before writing Pusher cache updates to Postgres |
 | `PUSHER_FALLBACK_POLL_MS` | `300000` | Poll `team/activity` for recent owns (runs even when Pusher is healthy) |
+| `PUSHER_RECONNECT_CHECK_MS` | `60000` | Watchdog interval reconnecting a dead Pusher socket or a non-connected client |
+| `PUSHER_RECONNECT_DELAY_MS` | `5000` | Delay before the automatic reconnect that follows a socket close |
 
 **Troubleshooting:**
 
 - No live announces but bot online → run `seven pusher status`; check `HTB_V4_TOKEN` (Pusher auth uses the same Bearer token)
+- State stuck on `disconnected` / `unavailable` → run `seven pusher reconnect` (the watchdog retries every minute anyway)
 - Missed events after outage → fallback poll catches up; captain runs `seven pusher history` and `seven pusher repost <id>` if needed
+- Own missed while Pusher was down for hours → the 15-minute fallback window cannot replay it; captain runs `team activity sync publish 1` (or more) to announce the recent missing owns from the HTB team activity API
 - Target/member not resolved on repost → Pusher auto-fetches missing targets via `ensureCachedTarget`; retry repost if needed
 - Collect raw payloads in staging → set `IS_DEV_INSTANCE=true` and inspect `LOG_DIR/PUSHER_MSG_LOG.json` (Docker volume `seven_logs`) or `cache/PUSHER_MSG_LOG.json` locally
 

@@ -334,6 +334,14 @@ function resolveLocalIntent(content, dfResult = null, decodedParams = null, cont
 		}
 	}
 
+	if (/^pusher\s+reconnect\s*$/i.test(lower)) {
+		return {
+			intent: "admin.pusherReconnect",
+			parameters: {},
+			allRequiredParamsPresent: true,
+		}
+	}
+
 	const pusherHistoryMatch = text.match(/^pusher\s+history(?:\s+(\S+))?\s*$/i)
 	if (pusherHistoryMatch) {
 		return {

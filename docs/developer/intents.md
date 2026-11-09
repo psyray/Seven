@@ -43,6 +43,7 @@ Dialogflow intents map to handlers in the `switch` block of `bot.js`. Parameters
 | `admin.htbTokenSet` | Admin | `admin_htbTokenSet()` — refresh-only or full pair + persistence |
 | `admin.htbTokenStatus` | Admin | `admin_htbTokenStatus()` → `EGI.htbTokenStatus()` |
 | `admin.pusherStatus` | Admin | `NOTIFICATION_ROUTER.getStatusEmbed()` |
+| `admin.pusherReconnect` | Admin | `admin_pusherReconnect()` → `HtbPusherSubscription.reconnect({ force: true })` |
 | `captain.pusherHistory` | Captain | `NOTIFICATION_ROUTER.getHistoryEmbed()` → `EGI.pusherHistory()` |
 | `captain.pusherRepost` | Captain | `NOTIFICATION_ROUTER.repostToChannel()` → `handleOwnEvent({ forceRepost: true })` |
 | `captain.teamActivitySync` | Captain | Silent sync, `publish` (N recent), or `publish-all` — see modes below |
@@ -71,6 +72,7 @@ Captain/admin commands (no Dialogflow intent required):
 | Phrase | Local intent |
 |--------|--------------|
 | `pusher status` | `admin.pusherStatus` |
+| `pusher reconnect` | `admin.pusherReconnect` |
 | `htb token status` / `token status` | `admin.htbTokenStatus` |
 | `htb token set <refresh>` | `admin.htbTokenSet` (mode `refresh`) |
 | `htb token refresh` | `admin.htbTokenRefresh` (stored refresh) |
