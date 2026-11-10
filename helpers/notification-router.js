@@ -113,6 +113,7 @@ class NotificationRouter {
 			const rows = await this.notificationStore.loadKnownOwnRows({
 				sinceMs,
 				ownTypes: OWN_TYPE_LIST,
+				announcedOnly: true,
 			})
 			for (const row of rows) {
 				if (row.uid && row.event_type && row.target) {
@@ -718,7 +719,12 @@ class NotificationRouter {
 	async processFallbackActivityItems(items) {
 		let announced = 0
 		let skipped = 0
-		for (const item of items) {
+		let failed = 0
+		// Oldest first: the watermark advances with each processed event, so consuming the
+		// newest-first API payload as-is makes every older own of the same batch look
+		// already processed (a user flag five seconds before its root was silently dropped).
+		const ordered = [...items].sort((a, b) => (a._activityTs || 0) - (b._activityTs || 0))
+		for (const item of ordered) {
 			const uid = item.user_id
 			const normalized = this.normalizeMemberActivityItem(item, uid)
 			if (!normalized || !this.isTeamMember(normalized.uid)) {
@@ -744,7 +750,7 @@ class NotificationRouter {
 				})
 			}
 		}
-		return { announced, skipped, total: items.length }
+		return { announced, skipped, failed, total: items.length }
 	}
 
 	async catchUpRecentActivity() {
